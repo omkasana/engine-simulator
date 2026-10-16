@@ -22,6 +22,7 @@ class LoadSimulationCluster : public UiElement {
         virtual void onMouseUp(const Point &mouseLocal);
         virtual void onMouseClick(const Point &mouseLocal);
         void setUnits();
+        void setUnits(const std::string &powerUnits, const std::string &torqueUnits);
 
         void setSimulator(Simulator *simulator) { m_simulator = simulator; }
 

@@ -24,6 +24,7 @@ class UiManager {
         void dismissOverlay() { m_overlayHost.dismiss(); }
         void showControlsOverlay();
         void showEnginePickerOverlay();
+        void showSettingsOverlay();
         bool hasOverlay() const { return m_overlayHost.isVisible(); }
 
     protected:

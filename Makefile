@@ -7,21 +7,25 @@ CMAKE_ARGS ?=
 CORE_PRESET := $(PLATFORM)
 DESKTOP_PRESET := $(PLATFORM)-desktop
 CI_PRESET := $(PLATFORM)-ci
+PACKAGE_PRESET := $(PLATFORM)-package
 
 ifeq ($(PLATFORM),windows-x86_64)
-DESKTOP_EXECUTABLE := build/$(DESKTOP_PRESET)/engine-sim-desktop.exe
+DESKTOP_EXECUTABLE := build/$(DESKTOP_PRESET)/RelWithDebInfo/engine-sim-desktop.exe
+CPACK_ARGS := -C RelWithDebInfo
 else
 DESKTOP_EXECUTABLE := build/$(DESKTOP_PRESET)/engine-sim-desktop
+CPACK_ARGS :=
 endif
 
 .DEFAULT_GOAL := help
-.PHONY: help portable-configure portable-build portable-run portable-test portable-validate export-meshes web web-serve web-serve-lan
+.PHONY: help portable-configure portable-build portable-run portable-test portable-validate portable-package export-meshes web web-serve web-serve-lan
 
 help:
 	@echo "make PLATFORM=<target> portable-build  Configure and build the desktop host"
 	@echo "make PLATFORM=<target> portable-run    Configure, build, and run the desktop host"
 	@echo "make PLATFORM=<target> portable-test   Configure, build, and test the portable core"
 	@echo "make PLATFORM=<target> portable-validate Run the CI-equivalent core and SDL audio tests"
+	@echo "make PLATFORM=<target> portable-package Build native installable packages"
 	@echo "make export-meshes                     Export authored Blender meshes"
 	@echo "make web                               Build the Emscripten/WebGL 2 browser host"
 	@echo "make web-serve                         Build and serve it at http://localhost:8080"
@@ -46,6 +50,11 @@ portable-validate:
 	cmake --build --preset $(CI_PRESET)
 	ctest --preset $(CI_PRESET) --exclude-regex SdlAudioOutput
 	ctest --preset $(CI_PRESET) --tests-regex SdlAudioOutput
+
+portable-package:
+	cmake --preset $(PACKAGE_PRESET) $(CMAKE_ARGS)
+	cmake --build --preset $(PACKAGE_PRESET)
+	cd build/$(PACKAGE_PRESET) && cpack $(CPACK_ARGS)
 
 export-meshes:
 	uv run --with bpy --python 3.13 tools/export_blender_meshes.py

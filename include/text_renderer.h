@@ -20,9 +20,7 @@ public:
     ~TextRenderer();
     bool loadFont(const std::string &path);
 
-    // Scale applied to Silkscreen's normal-width (0.714em) advance. This is
-    // intentionally user-tunable while retaining the font's relative glyph
-    // widths (rather than forcing every character into one fixed cell).
+    // Fallback metrics used only when a bundled TrueType font cannot load.
     static constexpr float CharacterAdvance = 0.85f;
     // Preserve the source font's common left-side inset.
     static constexpr float LeftBearing = 0.12f;

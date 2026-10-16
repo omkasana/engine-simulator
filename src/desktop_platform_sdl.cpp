@@ -224,6 +224,18 @@ std::string DesktopPlatformSdl::applicationDirectory() const {
     return basePath;
 }
 
+std::string DesktopPlatformSdl::preferencesDirectory() const {
+#if defined(__EMSCRIPTEN__)
+    return {};
+#else
+    char *path = SDL_GetPrefPath("OpenEngineSimulator", "OpenEngineSimulator");
+    if (path == nullptr) return {};
+    const std::string result(path);
+    SDL_free(path);
+    return result;
+#endif
+}
+
 std::string DesktopPlatformSdl::lastError() const { return SDL_GetError(); }
 std::size_t DesktopPlatformSdl::keyIndex(DesktopKey key) { return static_cast<std::size_t>(key); }
 std::size_t DesktopPlatformSdl::mouseButtonIndex(DesktopMouseButton button) { return static_cast<std::size_t>(button); }

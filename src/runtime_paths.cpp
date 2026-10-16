@@ -16,6 +16,7 @@ RuntimePaths RuntimePaths::discover(
     packagedAssetDirectories.emplace_back("/assets");
 #endif
     packagedAssetDirectories.emplace_back(applicationDirectory / "../assets");
+    packagedAssetDirectories.emplace_back(applicationDirectory / "../share/open-engine-simulator/assets");
     packagedAssetDirectories.emplace_back(applicationDirectory / "assets");
     packagedAssetDirectories.emplace_back(applicationDirectory / "Contents/assets");
     paths.assetDirectory = applicationDirectory / "../assets";

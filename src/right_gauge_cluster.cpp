@@ -477,3 +477,12 @@ void RightGaugeCluster::setUnits() {
             { m_app->getForegroundColor(), -30, -22, 3.0f, 6.0f, shortenAngle, shortenAngle }, 4);
     }
 }
+
+void RightGaugeCluster::setUnits(
+    const std::string &speedUnits,
+    const std::string &pressureUnits)
+{
+    m_speedUnits = speedUnits;
+    m_pressureUnits = pressureUnits;
+    setUnits();
+}

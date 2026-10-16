@@ -5,6 +5,32 @@
 
 #include <fstream>
 
+namespace {
+int nextUtf8Codepoint(const std::string &text, std::size_t &offset) {
+    const unsigned char lead = static_cast<unsigned char>(text[offset++]);
+    if (lead < 0x80) return lead;
+
+    int codepoint = 0;
+    int continuationCount = 0;
+    if ((lead & 0xE0) == 0xC0) { codepoint = lead & 0x1F; continuationCount = 1; }
+    else if ((lead & 0xF0) == 0xE0) { codepoint = lead & 0x0F; continuationCount = 2; }
+    else if ((lead & 0xF8) == 0xF0) { codepoint = lead & 0x07; continuationCount = 3; }
+    else return '?';
+
+    if (offset + static_cast<std::size_t>(continuationCount) > text.size()) {
+        offset = text.size();
+        return '?';
+    }
+    for (int i = 0; i < continuationCount; ++i) {
+        const unsigned char continuation = static_cast<unsigned char>(text[offset]);
+        if ((continuation & 0xC0) != 0x80) return '?';
+        ++offset;
+        codepoint = (codepoint << 6) | (continuation & 0x3F);
+    }
+    return codepoint;
+}
+}
+
 struct TextRenderer::FontData {
     std::vector<unsigned char> bytes;
     stbtt_fontinfo info = {};
@@ -30,10 +56,12 @@ bool TextRenderer::loadFont(const std::string &path) {
 float TextRenderer::CalculateWidth(const std::string &text, float height) const {
     float widest = 0.0f, width = 0.0f;
     const float scale = m_font ? stbtt_ScaleForPixelHeight(&m_font->info, height) : 0.0f;
-    for (const char c : text) {
-        if (c == '\n') { widest = std::max(widest, width); width = 0.0f; continue; }
-        if (m_font) { int advance = 0, bearing = 0; stbtt_GetCodepointHMetrics(&m_font->info, static_cast<unsigned char>(c), &advance, &bearing); width += advance * scale; }
-        else width += height * characterAdvance(c);
+    std::size_t offset = 0;
+    while (offset < text.size()) {
+        const int codepoint = nextUtf8Codepoint(text, offset);
+        if (codepoint == '\n') { widest = std::max(widest, width); width = 0.0f; continue; }
+        if (m_font) { int advance = 0, bearing = 0; stbtt_GetCodepointHMetrics(&m_font->info, codepoint, &advance, &bearing); width += advance * scale; }
+        else width += height * characterAdvance(codepoint < 0x80 ? static_cast<char>(codepoint) : '?');
     }
     return std::max(widest, width);
 }
@@ -44,9 +72,10 @@ void TextRenderer::RenderText(const std::string &text, float x, float y, float h
     const float scale = stbtt_ScaleForPixelHeight(&m_font->info, height);
     float cursorX = x, cursorY = y;
     std::vector<Run> runs;
-    for (const char c : text) {
-        if (c == '\n') { cursorX = x; cursorY += height * 1.25f; continue; }
-        const int codepoint = static_cast<unsigned char>(c);
+    std::size_t offset = 0;
+    while (offset < text.size()) {
+        const int codepoint = nextUtf8Codepoint(text, offset);
+        if (codepoint == '\n') { cursorX = x; cursorY += height * 1.25f; continue; }
         int advance = 0, bearing = 0, width = 0, glyphHeight = 0, xoff = 0, yoff = 0;
         stbtt_GetCodepointHMetrics(&m_font->info, codepoint, &advance, &bearing);
         unsigned char *bitmap = stbtt_GetCodepointBitmap(&m_font->info, scale, scale, codepoint, &width, &glyphHeight, &xoff, &yoff);

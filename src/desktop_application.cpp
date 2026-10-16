@@ -22,7 +22,7 @@ namespace {
 constexpr float EngineViewCompositionOffsetY = -0.12f;
 }
 
-std::string EngineSimApplication::s_buildVersion = "0.2.2";
+std::string EngineSimApplication::s_buildVersion = "0.3.0";
 
 EngineSimApplication::EngineSimApplication()
     : m_platform(nullptr), m_renderer(nullptr), m_audioOutput(nullptr), m_iceEngine(nullptr),
@@ -59,9 +59,17 @@ void EngineSimApplication::initialize(
     m_platform = platform;
     m_renderer = renderer;
     m_audioOutput = audioOutput;
+    const std::string preferencesDirectory = platform->preferencesDirectory();
+    if (!preferencesDirectory.empty()) {
+        m_preferencesPath = std::filesystem::path(preferencesDirectory) / "preferences.ini";
+        m_userPreferences.load(m_preferencesPath);
+    }
     m_assetPath = runtimePaths.assetDirectory.string();
     m_authoredMeshes.load((runtimePaths.assetDirectory / "authored_meshes.obj").string());
-    m_textRenderer.loadFont((runtimePaths.assetDirectory / "fonts/slkscr.ttf").string());
+    const char *font = m_userPreferences.uiStyle == UiStyle::Modern
+        ? "fonts/Inter.ttf" : "fonts/slkscr.ttf";
+    if (!m_textRenderer.loadFont((runtimePaths.assetDirectory / font).string()))
+        m_textRenderer.loadFont((runtimePaths.assetDirectory / "fonts/slkscr.ttf").string());
     m_screenWidth = platform->windowWidth();
     m_screenHeight = platform->windowHeight();
     // Oscilloscopes can emit many more line segments while the starter is
@@ -306,18 +314,8 @@ float EngineSimApplication::unitsToPixels(float units) const {
 const SimulationObject::ViewParameters &EngineSimApplication::getViewParameters() const { return m_viewParameters; }
 
 void EngineSimApplication::configure(const ApplicationSettings &settings) {
-    m_applicationSettings = settings;
-    m_background = ysColor::srgbiToLinear(settings.colorBackground);
-    m_foreground = ysColor::srgbiToLinear(settings.colorForeground);
-    m_shadow = ysColor::srgbiToLinear(settings.colorShadow);
-    m_highlight1 = ysColor::srgbiToLinear(settings.colorHighlight1);
-    m_highlight2 = ysColor::srgbiToLinear(settings.colorHighlight2);
-    m_pink = ysColor::srgbiToLinear(settings.colorPink);
-    m_red = ysColor::srgbiToLinear(settings.colorRed);
-    m_orange = ysColor::srgbiToLinear(settings.colorOrange);
-    m_yellow = ysColor::srgbiToLinear(settings.colorYellow);
-    m_blue = ysColor::srgbiToLinear(settings.colorBlue);
-    m_green = ysColor::srgbiToLinear(settings.colorGreen);
+    m_scriptApplicationSettings = settings;
+    applyUserPreferences();
     if (settings.startFullscreen) m_platform->setFullscreen(true);
 }
 
@@ -517,6 +515,98 @@ void EngineSimApplication::toggleFullscreen() {
 void EngineSimApplication::showControlsOverlay() { m_uiManager.showControlsOverlay(); }
 
 void EngineSimApplication::showEnginePickerOverlay() { m_uiManager.showEnginePickerOverlay(); }
+
+void EngineSimApplication::showSettingsOverlay() { m_uiManager.showSettingsOverlay(); }
+
+void EngineSimApplication::setUiStyle(UiStyle uiStyle) {
+    m_userPreferences.uiStyle = uiStyle;
+    applyUserPreferences();
+    saveUserPreferences();
+}
+
+void EngineSimApplication::setUnitSystem(UnitSystem unitSystem) {
+    m_userPreferences.unitSystem = unitSystem;
+    applyUserPreferences();
+    saveUserPreferences();
+}
+
+void EngineSimApplication::cycleCurrency(int direction) {
+    m_userPreferences.cycleCurrency(direction);
+    saveUserPreferences();
+}
+
+void EngineSimApplication::adjustFuelPrice(int steps) {
+    m_userPreferences.adjustFuelPrice(steps);
+    saveUserPreferences();
+}
+
+void EngineSimApplication::resetUserPreferences() {
+    m_userPreferences.reset();
+    applyUserPreferences();
+    saveUserPreferences();
+}
+
+void EngineSimApplication::applyUserPreferences() {
+    m_applicationSettings = m_scriptApplicationSettings;
+    const bool modern = m_userPreferences.uiStyle == UiStyle::Modern;
+    if (modern) {
+        const bool metric = m_userPreferences.unitSystem == UnitSystem::Metric;
+        m_applicationSettings.powerUnits = metric ? "kW" : "hp";
+        m_applicationSettings.torqueUnits = metric ? "Nm" : "lb-ft";
+        m_applicationSettings.speedUnits = metric ? "kph" : "mph";
+        m_applicationSettings.pressureUnits = metric ? "kPa" : "inHg";
+        m_applicationSettings.boostUnits = metric ? "bar" : "psi";
+
+        m_applicationSettings.colorBackground = 0x0A0D10;
+        m_applicationSettings.colorForeground = 0xEDF2F4;
+        m_applicationSettings.colorShadow = 0x07090B;
+        m_applicationSettings.colorHighlight1 = 0xE6674A;
+        m_applicationSettings.colorHighlight2 = 0xEDF2F4;
+        m_applicationSettings.colorPink = 0xD68CAA;
+        m_applicationSettings.colorRed = 0xEF625B;
+        m_applicationSettings.colorOrange = 0xF49A4A;
+        m_applicationSettings.colorYellow = 0xEFCB68;
+        m_applicationSettings.colorBlue = 0x75BBD1;
+        m_applicationSettings.colorGreen = 0xA6C76C;
+    }
+
+    m_background = ysColor::srgbiToLinear(m_applicationSettings.colorBackground);
+    m_foreground = ysColor::srgbiToLinear(m_applicationSettings.colorForeground);
+    m_shadow = ysColor::srgbiToLinear(m_applicationSettings.colorShadow);
+    m_highlight1 = ysColor::srgbiToLinear(m_applicationSettings.colorHighlight1);
+    m_highlight2 = ysColor::srgbiToLinear(m_applicationSettings.colorHighlight2);
+    m_pink = ysColor::srgbiToLinear(m_applicationSettings.colorPink);
+    m_red = ysColor::srgbiToLinear(m_applicationSettings.colorRed);
+    m_orange = ysColor::srgbiToLinear(m_applicationSettings.colorOrange);
+    m_yellow = ysColor::srgbiToLinear(m_applicationSettings.colorYellow);
+    m_blue = ysColor::srgbiToLinear(m_applicationSettings.colorBlue);
+    m_green = ysColor::srgbiToLinear(m_applicationSettings.colorGreen);
+
+    if (!m_assetPath.empty()) {
+        const char *font = modern ? "fonts/Inter.ttf" : "fonts/slkscr.ttf";
+        if (!m_textRenderer.loadFont((std::filesystem::path(m_assetPath) / font).string()))
+            m_textRenderer.loadFont((std::filesystem::path(m_assetPath) / "fonts/slkscr.ttf").string());
+    }
+    if (m_rightGaugeCluster != nullptr) {
+        m_rightGaugeCluster->setUnits(
+            m_applicationSettings.speedUnits,
+            m_applicationSettings.pressureUnits);
+    }
+    if (m_loadSimulationCluster != nullptr) {
+        m_loadSimulationCluster->setUnits(
+            m_applicationSettings.powerUnits,
+            m_applicationSettings.torqueUnits);
+    }
+    if (m_oscCluster != nullptr) {
+        m_oscCluster->setUnits(
+            m_applicationSettings.powerUnits,
+            m_applicationSettings.torqueUnits);
+    }
+}
+
+void EngineSimApplication::saveUserPreferences() const {
+    if (!m_preferencesPath.empty()) m_userPreferences.save(m_preferencesPath);
+}
 
 void EngineSimApplication::refreshUserInterface() {
     m_uiManager.destroy();

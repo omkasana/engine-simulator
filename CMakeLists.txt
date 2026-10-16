@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(engine-sim VERSION 0.2.2 LANGUAGES CXX)
+project(engine-sim VERSION 0.3.0 LANGUAGES CXX)
 
 include(CTest)
 include(FetchContent)
@@ -138,7 +138,8 @@ add_library(engine-sim-visualization STATIC
     src/ui_button.cpp
     src/ui_element.cpp
     src/ui_manager.cpp
-    src/ui_utilities.cpp)
+    src/ui_utilities.cpp
+    src/user_preferences.cpp)
 target_include_directories(engine-sim-visualization
     PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
     PRIVATE

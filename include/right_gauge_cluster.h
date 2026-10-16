@@ -30,6 +30,7 @@ class RightGaugeCluster : public UiElement {
 
         void setEngine(Engine *engine);
         void setUnits();
+        void setUnits(const std::string &speedUnits, const std::string &pressureUnits);
         double getManifoldPressureWithUnits(double ambientPressure);
 
         Simulator *m_simulator;
