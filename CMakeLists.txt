@@ -1,57 +1,53 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.24)
 
-option(DTV "Enable video output" OFF)
-option(PIRANHA_ENABLED "Enable scripting input" ON)
-option(DISCORD_ENABLED "Enable Discord Rich Presence" ON)
+project(engine-sim VERSION 0.2.2 LANGUAGES CXX)
 
-if (DTV)
-    add_compile_definitions(ATG_ENGINE_SIM_VIDEO_CAPTURE)
-endif (DTV)
+include(CTest)
+include(FetchContent)
+include(cmake/EngineSimShaders.cmake)
+include(cmake/EngineSimEngineCatalog.cmake)
 
-if (PIRANHA_ENABLED)
-    add_compile_definitions(ATG_ENGINE_SIM_PIRANHA_ENABLED)
-endif (PIRANHA_ENABLED)
+option(ENGINE_SIM_BUILD_DESKTOP "Build the SDL3 desktop host" OFF)
+option(ENGINE_SIM_BUILD_HEADLESS "Build the deterministic WAV renderer" OFF)
+option(ENGINE_SIM_BUILD_WEB "Build the Emscripten/WebGL 2 browser host" OFF)
+option(ENGINE_SIM_BUILD_SCRIPTING "Build the Piranha script interpreter" OFF)
+option(ENGINE_SIM_FETCH_SDL3 "Fetch pinned SDL3 when it is not installed" ON)
+option(ENGINE_SIM_MACOS_APP_BUNDLE "Build the desktop host as a macOS .app bundle" OFF)
 
-if (DISCORD_ENABLED)
-    add_compile_definitions(ATG_ENGINE_SIM_DISCORD_ENABLED)
-endif (DISCORD_ENABLED)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Enable group projects in folders
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set_property(GLOBAL PROPERTY PREDEFINED_TARGETS_FOLDER "cmake")
 
-project(engine-sim)
+set(ENGINE_SIM_SUBMODULE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/dependencies/submodules")
+foreach(submodule IN ITEMS simple-2d-constraint-solver csv-io piranha)
+    if(NOT EXISTS "${ENGINE_SIM_SUBMODULE_DIR}/${submodule}/CMakeLists.txt")
+        message(FATAL_ERROR
+            "Missing ${submodule} submodule. Run: git submodule update --init --recursive")
+    endif()
+endforeach()
 
-set(CMAKE_CXX_STANDARD 17)
+# Core simulation has no desktop, graphics, or audio-device dependency.
+file(GLOB ENGINE_SIM_SCS_SOURCES CONFIGURE_DEPENDS
+    "${ENGINE_SIM_SUBMODULE_DIR}/simple-2d-constraint-solver/src/*.cpp")
+add_library(simple-2d-constraint-solver STATIC ${ENGINE_SIM_SCS_SOURCES})
+target_include_directories(simple-2d-constraint-solver
+    PUBLIC "${ENGINE_SIM_SUBMODULE_DIR}/simple-2d-constraint-solver/include")
+set_property(TARGET simple-2d-constraint-solver PROPERTY FOLDER "third_party/scs")
+if(NOT MSVC)
+    target_compile_definitions(simple-2d-constraint-solver PUBLIC __forceinline=inline)
+    target_compile_options(simple-2d-constraint-solver PRIVATE
+        "-include${CMAKE_CURRENT_SOURCE_DIR}/cmake/EngineSimLegacySolverCompatibility.h")
+endif()
 
-# ========================================================
-# GTEST
-
-include(FetchContent)
-FetchContent_Declare(
-    googletest
-    URL
-    https://github.com/google/googletest/archive/609281088cfefc76f9d0ce82e1ff6c30cc3591e5.zip
-)
-
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(googletest)
-
-set_property(TARGET gmock PROPERTY FOLDER "gtest")
-set_property(TARGET gmock_main PROPERTY FOLDER "gtest")
-set_property(TARGET gtest PROPERTY FOLDER "gtest")
-set_property(TARGET gtest_main PROPERTY FOLDER "gtest")
-
-# ========================================================
-
-add_library(engine-sim STATIC
-    # Source files
-    src/audio_buffer.cpp
+set(ENGINE_SIM_CORE_SOURCES
     src/camshaft.cpp
-    src/crankshaft.cpp
     src/combustion_chamber.cpp
     src/connecting_rod.cpp
     src/convolution_filter.cpp
+    src/crankshaft.cpp
     src/cylinder_bank.cpp
     src/cylinder_head.cpp
     src/delay_filter.cpp
@@ -86,236 +82,96 @@ add_library(engine-sim STATIC
     src/valvetrain.cpp
     src/vehicle.cpp
     src/vehicle_drag_constraint.cpp
-    src/vtec_valvetrain.cpp
+    src/vtec_valvetrain.cpp)
 
-    # Include files
-    include/audio_buffer.h
-    include/application_settings.h
-    include/camshaft.h
-    include/crankshaft.h
-    include/combustion_chamber.h
-    include/connecting_rod.h
-    include/convolution_filter.h
-    include/cylinder_bank.h
-    include/cylinder_head.h
-    include/delay_filter.h
-    include/derivative_filter.h
-    include/direct_throttle_linkage.h
-    include/dynamometer.h
-    include/engine.h
-    include/exhaust_system.h
-    include/feedback_comb_filter.h
-    include/filter.h
-    include/fuel.h
-    include/function.h
-    include/gas_system.h
-    include/gaussian_filter.h
-    include/governor.h
-    include/ignition_module.h
-    include/impulse_response.h
-    include/intake.h
-    include/jitter_filter.h
-    include/leveling_filter.h
-    include/low_pass_filter.h
-    include/part.h
-    include/piston.h
-    include/piston_engine_simulator.h
-    include/simulator.h
-    include/standard_valvetrain.h
-    include/starter_motor.h
-    include/synthesizer.h
-    include/throttle.h
-    include/transmission.h
-    include/units.h
-    include/utilities.h
-    include/valvetrain.h
-    include/vehicle.h
-    include/vehicle_drag_constraint.h
-    include/vtec_valvetrain.h
-)
+add_library(engine-sim-core STATIC ${ENGINE_SIM_CORE_SOURCES})
+add_library(engine-sim::core ALIAS engine-sim-core)
+target_include_directories(engine-sim-core
+    PUBLIC
+        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+        "$<INSTALL_INTERFACE:include>")
+target_link_libraries(engine-sim-core PUBLIC simple-2d-constraint-solver)
+target_compile_features(engine-sim-core PUBLIC cxx_std_17)
 
-target_link_libraries(engine-sim
-    simple-2d-constraint-solver
-    csv-io
-    delta-basic)
-
-target_include_directories(engine-sim
-    PUBLIC dependencies/submodules)
-
-if (PIRANHA_ENABLED)
-    add_library(engine-sim-script-interpreter STATIC
-        # Source files
-        scripting/src/channel_types.cpp
-        scripting/src/compiler.cpp
-        scripting/src/engine_context.cpp
-        scripting/src/language_rules.cpp
-
-        # Include files
-        scripting/include/actions.h
-        scripting/include/camshaft_node.h
-        scripting/include/channel_types.h
-        scripting/include/compiler.h
-        scripting/include/connecting_rod_node.h
-        scripting/include/crankshaft_node.h
-        scripting/include/cylinder_bank_node.h
-        scripting/include/cylinder_head_node.h
-        scripting/include/engine_context.h
-        scripting/include/engine_node.h
-        scripting/include/engine_sim.h
-        scripting/include/exhaust_system_node.h
-        scripting/include/intake_node.h
-        scripting/include/function_node.h
-        scripting/include/ignition_module_node.h
-        scripting/include/ignition_wire_node.h
-        scripting/include/impulse_response_node.h
-        scripting/include/intake_node.h
-        scripting/include/language_rules.h
-        scripting/include/node.h
-        scripting/include/object_reference_node.h
-        scripting/include/object_reference_node_output.h
-        scripting/include/piranha.h
-        scripting/include/piston_node.h
-        scripting/include/rod_journal_node.h
-        scripting/include/standard_valvetrain_node.h
-        scripting/include/transmission_node.h
-        scripting/include/valvetrain_node.h
-        scripting/include/vtec_valvetrain_node.h
-		scripting/include/vehicle_node.h
-    )
-
-    target_include_directories(engine-sim-script-interpreter
-        PUBLIC dependencies/submodules)
-
-    target_link_libraries(engine-sim-script-interpreter
-        csv-io
-        piranha)
-endif (PIRANHA_ENABLED)
-
-if (DISCORD_ENABLED)
-    add_library(discord STATIC
-        # Source files
-        dependencies/discord/Discord.cpp
-
-        # Include files
-        dependencies/discord/Discord.h
-        dependencies/discord/discord_register.h
-        dependencies/discord/discord_rpc.h
-    )
-endif (DISCORD_ENABLED)
-
-add_executable(engine-sim-app WIN32
-    # Source files
-    src/main.cpp
-    src/engine_sim_application.cpp
+add_library(engine-sim-render-support STATIC
     src/geometry_generator.cpp
-    src/simulation_object.cpp
-    src/piston_object.cpp
+    src/runtime_paths.cpp
+    src/shaders.cpp
+    src/ui_math.cpp)
+target_include_directories(engine-sim-render-support
+    PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")
+target_link_libraries(engine-sim-render-support PUBLIC engine-sim::core)
+target_compile_features(engine-sim-render-support PUBLIC cxx_std_17)
+
+# Visualization remains host-neutral; the SDL adapter lives in the desktop
+# module so an alternate host can reuse the simulation and drawing layers.
+add_library(engine-sim-visualization STATIC
+    src/afr_cluster.cpp
+    src/combustion_chamber_object.cpp
     src/connecting_rod_object.cpp
-    src/ui_element.cpp
-    src/ui_manager.cpp
-    src/cylinder_pressure_gauge.cpp
-    src/ui_math.cpp
-    src/gauge.cpp
     src/crankshaft_object.cpp
     src/cylinder_bank_object.cpp
     src/cylinder_head_object.cpp
-    src/ui_button.cpp
-    src/ui_utilities.cpp
-    src/combustion_chamber_object.cpp
-    src/oscilloscope.cpp
-    src/shaders.cpp
-    src/engine_view.cpp
-    src/right_gauge_cluster.cpp
+    src/cylinder_pressure_gauge.cpp
     src/cylinder_temperature_gauge.cpp
-    src/labeled_gauge.cpp
-    src/throttle_display.cpp
-    src/afr_cluster.cpp
-    src/fuel_cluster.cpp
-    src/oscilloscope_cluster.cpp
-    src/performance_cluster.cpp
+    src/desktop_application.cpp
+    src/engine_catalog.cpp
+    src/engine_view.cpp
     src/firing_order_display.cpp
-    src/load_simulation_cluster.cpp
-    src/mixer_cluster.cpp
+    src/fuel_cluster.cpp
+    src/gauge.cpp
     src/info_cluster.cpp
+    src/labeled_gauge.cpp
+    src/load_simulation_cluster.cpp
+    src/authored_mesh_library.cpp
+    src/mixer_cluster.cpp
+    src/oscilloscope.cpp
+    src/oscilloscope_cluster.cpp
+    src/trainer_panel.cpp
+    src/overlay_host.cpp
+    src/performance_cluster.cpp
+    src/piston_object.cpp
+    src/right_gauge_cluster.cpp
+    src/simulation_object.cpp
+    src/throttle_display.cpp
+    src/text_renderer.cpp
+    src/ui_button.cpp
+    src/ui_element.cpp
+    src/ui_manager.cpp
+    src/ui_utilities.cpp)
+target_include_directories(engine-sim-visualization
+    PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+    PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb"
+        "${ENGINE_SIM_GENERATED_INCLUDE_DIRECTORY}")
+target_link_libraries(engine-sim-visualization PUBLIC engine-sim-render-support)
+target_compile_features(engine-sim-visualization PUBLIC cxx_std_17)
 
-    # Include files
-    include/delta.h
-    include/dtv.h
-    include/engine_sim_application.h
-    include/geometry_generator.h
-    include/simulation_object.h
-    include/piston_object.h
-    include/connecting_rod_object.h
-    include/ui_element.h
-    include/ui_manager.h
-    include/cylinder_pressure_gauge.h
-    include/ui_math.h
-    include/units.h
-    include/crankshaft_object.h
-    include/cylinder_bank_object.h
-    include/cylinder_head_object.h
-    include/ui_button.h
-    include/ui_utilities.h
-    include/combustion_chamber_object.h
-    include/oscilloscope.h
-    include/shaders.h
-    include/engine_view.h
-    include/right_gauge_cluster.h
-    include/cylinder_temperature_gauge.h
-    include/labeled_gauge.h
-    include/throttle_display.h
-    include/afr_cluster.h
-    include/fuel_cluster.h
-    include/oscilloscope_cluster.h
-    include/performance_cluster.h
-    include/firing_order_display.h
-    include/load_simulation_cluster.h
-    include/mixer_cluster.h
-    include/info_cluster.h
-)
+if(ENGINE_SIM_BUILD_SCRIPTING)
+    include(cmake/EngineSimScripting.cmake)
+endif()
 
-target_link_libraries(engine-sim-app
-    engine-sim
-)
+if(ENGINE_SIM_BUILD_DESKTOP)
+    include(cmake/EngineSimDesktop.cmake)
+    include(cmake/EngineSimPackaging.cmake)
+endif()
 
-if (DTV)
-    target_link_libraries(engine-sim-app
-        direct-to-video)
-endif (DTV)
+if(ENGINE_SIM_BUILD_HEADLESS)
+    if(NOT ENGINE_SIM_BUILD_SCRIPTING)
+        message(FATAL_ERROR "ENGINE_SIM_BUILD_HEADLESS requires ENGINE_SIM_BUILD_SCRIPTING")
+    endif()
+    add_executable(engine-sim-headless src/headless_main.cpp)
+    target_link_libraries(engine-sim-headless PRIVATE engine-sim::core engine-sim::scripting)
+    target_compile_features(engine-sim-headless PRIVATE cxx_std_17)
+    target_compile_definitions(engine-sim-headless PRIVATE
+        ENGINE_SIM_SOURCE_ASSET_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}/assets")
+    install(TARGETS engine-sim-headless RUNTIME DESTINATION bin)
+endif()
 
-if (PIRANHA_ENABLED)
-    target_link_libraries(engine-sim-app
-        engine-sim-script-interpreter)
-endif (PIRANHA_ENABLED)
+if(ENGINE_SIM_BUILD_WEB)
+    include(cmake/EngineSimWeb.cmake)
+endif()
 
-if (DISCORD_ENABLED)
-    add_library(discord-rpc STATIC IMPORTED)
-    set_property(TARGET discord-rpc PROPERTY IMPORTED_LOCATION ${PROJECT_SOURCE_DIR}/dependencies/discord/lib/discord-rpc.lib)
-    target_link_libraries(engine-sim-app
-    	discord
-	discord-rpc)
-endif (DISCORD_ENABLED)
-
-target_include_directories(engine-sim-app
-    PUBLIC dependencies/submodules)
-
-add_subdirectory(dependencies)
-
-# GTEST
-
-enable_testing()
-
-add_executable(engine-sim-test
-    # Source files
-    test/gas_system_tests.cpp
-    test/function_test.cpp
-    test/synthesizer_tests.cpp
-)
-
-target_link_libraries(engine-sim-test
-    gtest_main
-    engine-sim
-)
-
-include(GoogleTest)
-gtest_discover_tests(engine-sim-test)
+if(BUILD_TESTING)
+    include(cmake/EngineSimTests.cmake)
+endif()

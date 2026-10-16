@@ -16,6 +16,7 @@ UiElement::UiElement() {
     m_mouseOver = false;
     m_mouseHeld = false;
     m_visible = true;
+    m_renderLayer = 0;
 }
 
 UiElement::~UiElement() {
@@ -43,7 +44,8 @@ void UiElement::update(float dt) {
 
 void UiElement::render() {
     for (UiElement *child : m_children) {
-        if (child->isVisible()) child->render();
+        if (!child->isVisible()) continue;
+        child->render();
     }
 }
 
@@ -87,6 +89,7 @@ UiElement *UiElement::mouseOver(const Point &mouseLocal) {
     const int n = (int)getChildCount();
     for (int i = n - 1; i >= 0; --i) {
         UiElement *child = m_children[i];
+        if (!child->isVisible()) continue;
         UiElement *clickedElement = child->mouseOver(mouseLocal - child->m_localPosition);
         if (clickedElement != nullptr) {
             return clickedElement;
@@ -102,6 +105,10 @@ Point UiElement::getWorldPosition() const {
     return (m_parent != nullptr)
         ? m_parent->getWorldPosition() + m_localPosition
         : m_localPosition;
+}
+
+int UiElement::getEffectiveRenderLayer() const {
+    return m_renderLayer + ((m_parent != nullptr) ? m_parent->getEffectiveRenderLayer() : 0);
 }
 
 void UiElement::setLocalPosition(const Point &p, const Point &ref) {
@@ -172,34 +179,13 @@ void UiElement::resetShader() {
     m_app->getShaders()->SetObjectTransform(ysMath::LoadIdentity());
 }
 
-void UiElement::drawModel(
-    dbasic::ModelAsset *model,
-    const ysVector &color,
-    const Point &p,
-    const Point &s)
-{
-    resetShader();
-
-    const Point p_render = getRenderPoint(p);
-    const Point s_render = pixelsToUnits(s);
-
-    m_app->getShaders()->SetObjectTransform(
-        ysMath::MatMult(
-            ysMath::TranslationTransform(ysMath::LoadVector(p_render.x, p_render.y, 0.0)),
-            ysMath::ScaleTransform(ysMath::LoadVector(s_render.x, s_render.y, 0.0))
-        )
-    );
-
-    m_app->getShaders()->SetBaseColor(color);
-    m_app->getEngine()->DrawModel(m_app->getShaders()->GetUiFlags(), model, 0x11);
-}
-
 void UiElement::drawFrame(
         const Bounds &bounds,
         float thickness,
         const ysVector &frameColor,
         const ysVector &fillColor,
-        bool fill)
+        bool fill,
+        int layer)
 {
     GeometryGenerator *generator = m_app->getGeometryGenerator();
 
@@ -228,7 +214,7 @@ void UiElement::drawFrame(
         generator->endShape(&body);
 
         m_app->getShaders()->SetBaseColor(fillColor);
-        m_app->drawGenerated(body, 0x11, m_app->getShaders()->GetUiFlags());
+        m_app->drawGenerated(body, layer + getEffectiveRenderLayer(), m_app->getShaders()->GetUiFlags());
     }
 
     generator->startShape();
@@ -236,10 +222,10 @@ void UiElement::drawFrame(
     generator->endShape(&frame);
 
     m_app->getShaders()->SetBaseColor(frameColor);
-    m_app->drawGenerated(frame, 0x11, m_app->getShaders()->GetUiFlags());
+    m_app->drawGenerated(frame, layer + getEffectiveRenderLayer(), m_app->getShaders()->GetUiFlags());
 }
 
-void UiElement::drawBox(const Bounds &bounds, const ysVector &fillColor) {
+void UiElement::drawBox(const Bounds &bounds, const ysVector &fillColor, int layer) {
     GeometryGenerator *generator = m_app->getGeometryGenerator();
     const Bounds worldBounds = getRenderBounds(bounds);
 
@@ -256,7 +242,7 @@ void UiElement::drawBox(const Bounds &bounds, const ysVector &fillColor) {
 
     resetShader();
     m_app->getShaders()->SetBaseColor(fillColor);
-    m_app->drawGenerated(body, 0x11, m_app->getShaders()->GetUiFlags());
+    m_app->drawGenerated(body, layer + getEffectiveRenderLayer(), m_app->getShaders()->GetUiFlags());
 }
 
 void UiElement::drawText(
@@ -268,8 +254,11 @@ void UiElement::drawText(
     const Bounds renderBounds = unitsToPixels(getRenderBounds(bounds));
     const Point origin = renderBounds.getPosition(ref);
 
-    m_app->getTextRenderer()->RenderText(
-            s, origin.x, origin.y - height / 4, height);
+    TextRenderer *textRenderer = m_app->getTextRenderer();
+    const int oldLayer = textRenderer->renderLayer();
+    textRenderer->setRenderLayer(getEffectiveRenderLayer());
+    textRenderer->RenderText(s, origin.x, origin.y - height / 4, height);
+    textRenderer->setRenderLayer(oldLayer);
 }
 
 void UiElement::drawAlignedText(
@@ -292,8 +281,11 @@ void UiElement::drawAlignedText(
         Bounds::tl);
     const Point r = textBounds.getPosition(refText);
 
-    m_app->getTextRenderer()->RenderText(
-        s, origin.x - r.x, origin.y - r.y, height);
+    TextRenderer *textRenderer = m_app->getTextRenderer();
+    const int oldLayer = textRenderer->renderLayer();
+    textRenderer->setRenderLayer(getEffectiveRenderLayer());
+    textRenderer->RenderText(s, origin.x - r.x, origin.y - r.y, height);
+    textRenderer->setRenderLayer(oldLayer);
 }
 
 void UiElement::drawCenteredText(
@@ -306,6 +298,9 @@ void UiElement::drawCenteredText(
     const Point origin = renderBounds.getPosition(ref);
 
     const float width = m_app->getTextRenderer()->CalculateWidth(s, height);
-    m_app->getTextRenderer()->RenderText(
-            s, origin.x - width / 2, origin.y - height / 4, height);
+    TextRenderer *textRenderer = m_app->getTextRenderer();
+    const int oldLayer = textRenderer->renderLayer();
+    textRenderer->setRenderLayer(getEffectiveRenderLayer());
+    textRenderer->RenderText(s, origin.x - width / 2, origin.y - height / 4, height);
+    textRenderer->setRenderLayer(oldLayer);
 }

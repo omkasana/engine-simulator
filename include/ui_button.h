@@ -3,6 +3,8 @@
 
 #include "ui_element.h"
 
+#include <string>
+
 class UiButton : public UiElement {
     public:
         UiButton();
@@ -13,6 +15,9 @@ class UiButton : public UiElement {
 
         std::string m_text;
         float m_fontSize;
+        bool m_inverted;
+        bool m_drawFrame;
+        int m_layer;
 };
 
 #endif /* ATG_ENGINE_SIM_UI_BUTTON_H */

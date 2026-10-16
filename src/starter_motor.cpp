@@ -1,6 +1,8 @@
 #include "../include/starter_motor.h"
 
 #include "../include/units.h"
+#include <algorithm>
+#include <cmath>
 
 StarterMotor::StarterMotor() : atg_scs::Constraint(1, 1) {
     m_ks = 10.0;
@@ -42,4 +44,18 @@ void StarterMotor::calculate(Output *output, atg_scs::SystemState *state) {
         output->limits[0][0] = 0.0;
         output->limits[0][1] = m_enabled ? m_maxTorque : 0.0;
     }
+}
+
+void StarterMotor::sizeForDisplacement(double authoredTorque, double displacement, int cylinders) {
+    // Large/optimized engines can outgrow a template's starter. Size the
+    // motor for cranking compression, retaining stronger authored starters.
+    // A few very large cylinders have higher peak compression resistance than
+    // the same total displacement spread across more cylinders.
+    // This changes only the held starter's torque capacity, never running RPM.
+    const double litres = units::convert(displacement, units::L);
+    const double litresPerCylinder = litres / std::max(1, cylinders);
+    const double cylinderFactor = std::pow(std::max(1.0, litresPerCylinder / 2.0), 2.5);
+    constexpr double crankingTorqueNmPerLitre = 60.0;
+    m_maxTorque = std::max(authoredTorque,
+        units::torque(crankingTorqueNmPerLitre * litres * cylinderFactor, units::Nm));
 }

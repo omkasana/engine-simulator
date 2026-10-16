@@ -2,9 +2,9 @@
 #define ATG_ENGINE_SIM_UI_ELEMENT_H
 
 #include "ui_math.h"
+#include "render_math.h"
 
-#include "delta.h"
-
+#include <string>
 #include <vector>
 
 class EngineSimApplication;
@@ -51,6 +51,7 @@ class UiElement {
         UiElement *mouseOver(const Point &mouseLocal);
 
         Point getWorldPosition() const;
+        int getEffectiveRenderLayer() const;
 
         Point getLocalPosition() const { return m_localPosition; }
         void setLocalPosition(const Point &p) { m_localPosition = p; }
@@ -61,6 +62,9 @@ class UiElement {
 
         void setVisible(bool visible) { m_visible = visible; }
         bool isVisible() const { return m_visible; }
+
+        void setRenderLayer(int layer) { m_renderLayer = layer; }
+        int getRenderLayer() const { return m_renderLayer; }
 
         size_t getChildCount() const { return m_children.size(); }
 
@@ -82,20 +86,17 @@ class UiElement {
 
         void resetShader();
 
-        void drawModel(
-                dbasic::ModelAsset *model,
-                const ysVector &color,
-                const Point &p,
-                const Point &scale = { 1.0f, 1.0f });
         void drawFrame(
                 const Bounds &bounds,
                 float thickness,
                 const ysVector &frameColor,
                 const ysVector &fillColor,
-                bool fill = true);
+                bool fill = true,
+                int layer = 0x11);
         void drawBox(
                 const Bounds &bounds,
-                const ysVector &fillColor);
+                const ysVector &fillColor,
+                int layer = 0x11);
         void drawText(
                 const std::string &s,
                 const Bounds &bounds,
@@ -129,6 +130,7 @@ class UiElement {
         bool m_mouseOver;
         bool m_mouseHeld;
         bool m_visible;
+        int m_renderLayer;
 
     protected:
         EngineSimApplication *m_app;

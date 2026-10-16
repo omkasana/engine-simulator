@@ -8,7 +8,7 @@
 #include "ui_manager.h"
 #include "dynamometer.h"
 #include "oscilloscope.h"
-#include "audio_buffer.h"
+#include "audio_output.h"
 #include "convolution_filter.h"
 #include "shaders.h"
 #include "engine_view.h"
@@ -21,10 +21,15 @@
 #include "mixer_cluster.h"
 #include "info_cluster.h"
 #include "application_settings.h"
-#include "transmission.h"
+#include "desktop_platform.h"
 
-#include "delta.h"
-#include "dtv.h"
+#include <string>
+#include <functional>
+#include "runtime_paths.h"
+#include "renderer.h"
+#include "text_renderer.h"
+#include "authored_mesh_library.h"
+#include "transmission.h"
 
 #include <vector>
 
@@ -38,8 +43,16 @@ class EngineSimApplication {
 
         static std::string getBuildVersion() { return s_buildVersion; }
 
-        void initialize(void *instance, ysContextObject::DeviceAPI api);
+        void initialize(
+            DesktopPlatform *platform,
+            Renderer *renderer,
+            AudioOutput *audioOutput,
+            const RuntimePaths &runtimePaths);
         void run();
+        // Runs one platform frame. Returns false once the host should stop.
+        // Browser hosts call this from requestAnimationFrame instead of using
+        // the blocking native run() loop.
+        bool tick();
         void destroy();
 
         void loadEngine(Engine *engine, Vehicle *vehicle, Transmission *transmission);
@@ -49,19 +62,23 @@ class EngineSimApplication {
         void drawGeneratedUi(
                 const GeometryGenerator::GeometryIndices &indices,
                 int layer = 0);
+        void drawModel(
+                const std::string &modelName,
+                Shaders::StageEnableFlags flags,
+                int layer = 0);
         void drawGenerated(
                 const GeometryGenerator::GeometryIndices &indices,
                 int layer,
-                dbasic::StageEnableFlags flags);
+                Shaders::StageEnableFlags flags);
         void configure(const ApplicationSettings &settings);
         GeometryGenerator *getGeometryGenerator() { return &m_geometryGenerator; }
 
         Shaders *getShaders() { return &m_shaders; }
-        dbasic::TextRenderer *getTextRenderer() { return &m_textRenderer; }
+        TextRenderer *getTextRenderer() { return &m_textRenderer; }
 
         void createObjects(Engine *engine);
         void destroyObjects();
-        dbasic::DeltaEngine *getEngine() { return &m_engine; }
+        DesktopPlatform *getPlatform() { return m_platform; }
 
         float pixelsToUnits(float pixels) const;
         float unitsToPixels(float units) const;
@@ -79,18 +96,38 @@ class EngineSimApplication {
         const SimulationObject::ViewParameters &getViewParameters() const;
         void setViewLayer(int view) { m_viewParameters.Layer0 = view; }
 
-        dbasic::AssetManager *getAssetManager() { return &m_assetManager; }
-
         int getScreenWidth() const { return m_screenWidth; }
         int getScreenHeight() const { return m_screenHeight; }
+        float getAverageFramerate() const { return m_averageFramerate; }
 
         Simulator *getSimulator() { return m_simulator; }
         InfoCluster *getInfoCluster() { return m_infoCluster; }
         ApplicationSettings* getAppSettings() { return &m_applicationSettings; }
 
+        void toggleIgnition();
+        void toggleDynamometer();
+        void toggleDynamometerHold();
+        void toggleFullscreen();
+        void showTrainerOverlay();
+        void setTrainerSession(const std::string &path) { m_trainerSession = path; }
+        const std::string &trainerSession() const { return m_trainerSession; }
+        std::function<void(const std::string &, const std::string &)> trainerCommand;
+        void pollTrainerCommands();
+        void showControlsOverlay();
+        void showEnginePickerOverlay();
+        void changeGear(int direction);
+        void setTouchStarterHeld(bool held);
+        void setTouchThrottle(double value, bool held);
+        // Select the script that initialize() loads before any simulation or UI
+        // objects exist. This avoids treating a command-line script as a hot reload.
+        void setInitialEngineScript(const std::string &scriptPath);
+        // Queued so a picker button cannot destroy the UI tree while its click
+        // event is still being dispatched.
+        void requestEngineScript(const std::string &relativeScriptPath);
+
     protected:
-        void loadScript();
-        void processEngineInput();
+        bool loadScript(const std::string &relativeScriptPath);
+        void processEngineInput(float dt);
         void renderScene();
 
         void refreshUserInterface();
@@ -98,6 +135,9 @@ class EngineSimApplication {
     protected:
         double m_speedSetting = 1.0;
         double m_targetSpeedSetting = 1.0;
+        double m_touchThrottle = 0.0;
+        bool m_touchThrottleHeld = false;
+        bool m_touchStarterHeld = false;
 
         double m_clutchPressure = 1.0;
         double m_targetClutchPressure = 1.0;
@@ -110,25 +150,25 @@ class EngineSimApplication {
 
         float m_displayAngle;
         float m_displayHeight;
-        int m_gameWindowHeight;
         int m_screenWidth;
         int m_screenHeight;
         
         ApplicationSettings m_applicationSettings;
-        dbasic::ShaderSet m_shaderSet;
         Shaders m_shaders;
 
-        dbasic::DeltaEngine m_engine;
-        dbasic::AssetManager m_assetManager;
+        DesktopPlatform *m_platform;
+        Renderer *m_renderer;
+        AudioOutput *m_audioOutput;
 
+        std::string m_trainerSession;
+        std::uint64_t m_lastTrainerPoll = 0;
         std::string m_assetPath;
-
-        ysRenderTarget *m_mainRenderTarget;
-        ysGPUBuffer *m_geometryVertexBuffer;
-        ysGPUBuffer *m_geometryIndexBuffer;
+        std::string m_currentScriptPath = "main.mr";
+        std::string m_pendingScriptPath;
 
         GeometryGenerator m_geometryGenerator;
-        dbasic::TextRenderer m_textRenderer;
+        AuthoredMeshLibrary m_authoredMeshes;
+        TextRenderer m_textRenderer;
 
         std::vector<SimulationObject *> m_objects;
         Engine *m_iceEngine;
@@ -152,18 +192,6 @@ class EngineSimApplication {
         bool m_paused;
 
     protected:
-        void startRecording();
-        void updateScreenSizeStability();
-        bool readyToRecord();
-        void stopRecording();
-        void recordFrame();
-        bool isRecording() const { return m_recording; }
-
-        static constexpr int ScreenResolutionHistoryLength = 5;
-        int m_screenResolution[ScreenResolutionHistoryLength][2];
-        int m_screenResolutionIndex;
-        bool m_recording;
-
         ysVector m_background;
         ysVector m_foreground;
         ysVector m_shadow;
@@ -177,12 +205,11 @@ class EngineSimApplication {
         ysVector m_green;
         ysVector m_blue;
 
-        ysAudioBuffer *m_outputAudioBuffer;
-        AudioBuffer m_audioBuffer;
-        ysAudioSource *m_audioSource;
-
         int m_oscillatorSampleOffset;
         int m_screen;
+        float m_averageFramerate = 60.0f;
+        std::uint64_t m_lastTick = 0;
+        std::uint64_t m_lastRenderTick = 0;
 
 #ifdef ATG_ENGINE_SIM_VIDEO_CAPTURE
         atg_dtv::Encoder m_encoder;

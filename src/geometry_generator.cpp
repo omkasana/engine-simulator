@@ -1,5 +1,8 @@
 #include "../include/geometry_generator.h"
 
+#include <cmath>
+#include <cstring>
+
 GeometryGenerator::GeometryGenerator() {
     m_vertexData = nullptr;
     m_indexData = nullptr;
@@ -18,7 +21,7 @@ GeometryGenerator::~GeometryGenerator() {
 }
 
 void GeometryGenerator::initialize(int vertexBufferSize, int indexBufferSize) {
-    m_vertexData = new dbasic::Vertex[vertexBufferSize];
+    m_vertexData = new EngineSimVertex[vertexBufferSize];
     m_indexData = new unsigned short[indexBufferSize];
 
     m_vertexBufferSize = vertexBufferSize;
@@ -28,6 +31,8 @@ void GeometryGenerator::initialize(int vertexBufferSize, int indexBufferSize) {
 void GeometryGenerator::destroy() {
     delete[] m_vertexData;
     delete[] m_indexData;
+    m_vertexData = nullptr;
+    m_indexData = nullptr;
 }
 
 void GeometryGenerator::reset() {
@@ -45,10 +50,10 @@ bool GeometryGenerator::generateFilledCircle(
     // edge_length = (sin(theta) * radius) * 2
     // theta = arcsin(edge_length / (2 * radius))
 
-    const float angle = std::asinf(maxEdgeLength / (2 * radius));
+    const float angle = std::asin(maxEdgeLength / (2 * radius));
     const float steps = ysMath::Constants::TWO_PI / angle;
 
-    int wholeSteps = (int)std::ceilf(steps);
+    int wholeSteps = (int)std::ceil(steps);
     wholeSteps = (wholeSteps < 3)
         ? 3
         : wholeSteps;
@@ -83,7 +88,7 @@ bool GeometryGenerator::generateFilledFanPolygon(
     }
 
     // Generate center vertex
-    dbasic::Vertex *centerVertex = writeVertex();
+    EngineSimVertex *centerVertex = writeVertex();
     centerVertex->Normal = ysMath::GetVector4(normal);
     centerVertex->Pos = ysMath::GetVector4(center);
     centerVertex->TexCoord = ysVector2(0.5f, 0.5f);
@@ -101,12 +106,12 @@ bool GeometryGenerator::generateFilledFanPolygon(
 
     for (int i = 0; i < segmentCount; ++i) {
         const float angle0 = angleStep * i + rotation;
-        const float x0 = std::cosf(angle0);
-        const float y0 = std::sinf(angle0);
+        const float x0 = std::cos(angle0);
+        const float y0 = std::sin(angle0);
 
         const ysVector pos = ysMath::LoadVector(x0 * radius, y0 * radius, 0.0f, 1.0f);
 
-        dbasic::Vertex *newVertex = writeVertex();
+        EngineSimVertex *newVertex = writeVertex();
         newVertex->Normal = normal;
         newVertex->Pos = ysMath::MatMult(T, pos);
         newVertex->TexCoord = ysVector2(0.5f * x0 + 0.5f, 0.5f * y0 + 0.5f);
@@ -132,10 +137,10 @@ bool GeometryGenerator::generateLineRing(
 
     const float maxOuterRadius = params.radius + (params.patternHeight / 2);
 
-    const float angle = std::asinf(params.maxEdgeLength / (2 * maxOuterRadius));
+    const float angle = std::asin(params.maxEdgeLength / (2 * maxOuterRadius));
     const float steps = (actualEndAngle - actualStartAngle) / angle;
 
-    int segmentCount = (int)std::ceilf(steps);
+    int segmentCount = (int)std::ceil(steps);
     segmentCount = (segmentCount < 3)
         ? 3
         : segmentCount;
@@ -166,8 +171,8 @@ bool GeometryGenerator::generateLineRing(
 
     for (int i = 0; i <= segmentCount; ++i) {
         float angle0 = angleStep * i + actualStartAngle;
-        const float x0 = std::cosf(angle0);
-        const float y0 = std::sinf(angle0);
+        const float x0 = std::cos(angle0);
+        const float y0 = std::sin(angle0);
 
         if (angle0 >= actualEndAngle) angle0 = actualEndAngle;
         else if (angle0 <= actualStartAngle) angle0 = actualStartAngle;
@@ -194,12 +199,12 @@ bool GeometryGenerator::generateLineRing(
             params.textureOffset +
             angle0 * params.radius / (params.patternHeight * params.textureWidthHeightRatio);
 
-        dbasic::Vertex *outerVertex = writeVertex();
+        EngineSimVertex *outerVertex = writeVertex();
         outerVertex->Normal = params.normal;
         outerVertex->Pos = ysMath::MatMult(T, outerPos);
         outerVertex->TexCoord = ysVector2(s, 1.0f);
 
-        dbasic::Vertex *innerVertex = writeVertex();
+        EngineSimVertex *innerVertex = writeVertex();
         innerVertex->Normal = params.normal;
         innerVertex->Pos = ysMath::MatMult(T, innerPos);
         innerVertex->TexCoord = ysVector2(s, 0.0f);
@@ -264,7 +269,7 @@ bool GeometryGenerator::generateLine(
 
     const float ds = 1 / (params.patternHeight * params.textureWidthHeightRatio);
 
-    dbasic::Vertex *vertex = writeVertex();
+    EngineSimVertex *vertex = writeVertex();
     vertex->Normal = params.normal;
     vertex->Pos = ysMath::MatMult(T0, v0);
     vertex->TexCoord = ysVector2(0.0f, 1.0f);
@@ -372,7 +377,7 @@ bool GeometryGenerator::generateLine2d(
         return false;
     }
 
-    dbasic::Vertex *vertex;
+    EngineSimVertex *vertex;
 
     vertex = writeVertex();
     vertex->Normal = ysMath::Constants::ZAxis;
@@ -414,22 +419,28 @@ bool GeometryGenerator::generateFrame(const FrameParameters &params) {
     Line2dParameters lineParams;
     lineParams.lineWidth = params.lineWidth;
 
-    lineParams.x0 = params.x - params.frameWidth / 2 - params.lineWidth / 2;
-    lineParams.x1 = params.x + params.frameWidth / 2 + params.lineWidth / 2;
+    // Keep the complete stroke inside the requested bounds. This matters for
+    // panels that meet the edge of the render target: centering a one-pixel
+    // stroke directly on that edge lets WebGL clip half (or all) of it.
+    const float halfWidth = std::fmaxf(0.0f, params.frameWidth / 2 - params.lineWidth / 2);
+    const float halfHeight = std::fmaxf(0.0f, params.frameHeight / 2 - params.lineWidth / 2);
 
-    lineParams.y0 = lineParams.y1 = params.y + params.frameHeight / 2;
+    lineParams.x0 = params.x - halfWidth;
+    lineParams.x1 = params.x + halfWidth;
+
+    lineParams.y0 = lineParams.y1 = params.y + halfHeight;
     if (!generateLine2d(lineParams)) goto fail;
 
-    lineParams.y0 = lineParams.y1 = params.y - params.frameHeight / 2;
+    lineParams.y0 = lineParams.y1 = params.y - halfHeight;
     if (!generateLine2d(lineParams)) goto fail;
 
-    lineParams.y0 = params.y - params.frameHeight / 2 - params.lineWidth / 2;
-    lineParams.y1 = params.y + params.frameHeight / 2 + params.lineWidth / 2;
+    lineParams.y0 = params.y - halfHeight;
+    lineParams.y1 = params.y + halfHeight;
 
-    lineParams.x0 = lineParams.x1 = params.x + params.frameWidth / 2;
+    lineParams.x0 = lineParams.x1 = params.x + halfWidth;
     if (!generateLine2d(lineParams)) goto fail;
 
-    lineParams.x0 = lineParams.x1 = params.x - params.frameWidth / 2;
+    lineParams.x0 = lineParams.x1 = params.x - halfWidth;
     if (!generateLine2d(lineParams)) goto fail;
 
     return true;
@@ -480,10 +491,10 @@ bool GeometryGenerator::generateRing2d(const Ring2dParameters &params) {
 
     startSubshape();
 
-    const float angle = std::asinf(params.maxEdgeLength / (2 * params.outerRadius));
+    const float angle = std::asin(params.maxEdgeLength / (2 * params.outerRadius));
     const float steps = (params.endAngle - params.startAngle) / angle;
 
-    int segmentCount = (int)std::ceilf(steps);
+    int segmentCount = (int)std::ceil(steps);
     segmentCount = (segmentCount < 3)
         ? 3
         : segmentCount;
@@ -515,8 +526,8 @@ bool GeometryGenerator::generateRing2d(const Ring2dParameters &params) {
     const float fullWidth = params.outerRadius - params.innerRadius;
     for (int i = 0; i <= segmentCount; ++i) {
         float angle0 = angleStep * i + params.startAngle;
-        const float x0 = std::cosf(angle0);
-        const float y0 = std::sinf(angle0);
+        const float x0 = std::cos(angle0);
+        const float y0 = std::sin(angle0);
 
         const float s = (params.drawArrow)
             ? (angle0 - arrowStart) / (arrowEnd - arrowStart)
@@ -538,12 +549,12 @@ bool GeometryGenerator::generateRing2d(const Ring2dParameters &params) {
                     x0 * innerRadius + params.center_x,
                     y0 * innerRadius + params.center_y, 0.0f, 1.0f);
 
-        dbasic::Vertex *outerVertex = writeVertex();
+        EngineSimVertex *outerVertex = writeVertex();
         outerVertex->Normal = ysMath::Constants::ZAxis;
         outerVertex->Pos = outerPos;
         outerVertex->TexCoord = ysVector2(0.0f, 0.0f);
 
-        dbasic::Vertex *innerVertex = writeVertex();
+        EngineSimVertex *innerVertex = writeVertex();
         innerVertex->Normal = ysMath::Constants::ZAxis;
         innerVertex->Pos = innerPos;
         innerVertex->TexCoord = ysVector2(0.0f, 0.0f);
@@ -567,12 +578,12 @@ bool GeometryGenerator::generateCircle2d(const Circle2dParameters &params) {
 
     startSubshape();
 
-    float angle = std::asinf(params.maxEdgeLength / (2 * params.radius)) * 2;
+    float angle = std::asin(params.maxEdgeLength / (2 * params.radius)) * 2;
     angle = std::fminf(angle, ysMath::Constants::PI - params.smallestAngle);
 
     const float steps = ysMath::Constants::TWO_PI / angle;
 
-    int segmentCount = (int)std::ceilf(steps);
+    int segmentCount = (int)std::ceil(steps);
     segmentCount = (segmentCount < 3)
         ? 3
         : segmentCount;
@@ -586,7 +597,7 @@ bool GeometryGenerator::generateCircle2d(const Circle2dParameters &params) {
     }
 
     // Generate center vertex
-    dbasic::Vertex *centerVertex = writeVertex();
+    EngineSimVertex *centerVertex = writeVertex();
     centerVertex->Normal = ysMath::Constants::ZAxis;
     centerVertex->Pos = ysMath::LoadVector(params.center_x, params.center_y);
     centerVertex->TexCoord = ysVector2(0.5f, 0.5f);
@@ -595,13 +606,13 @@ bool GeometryGenerator::generateCircle2d(const Circle2dParameters &params) {
 
     for (int i = 0; i < segmentCount; ++i) {
         const float angle0 = angleStep * i;
-        const float x = std::cosf(angle0);
-        const float y = std::sinf(angle0);
+        const float x = std::cos(angle0);
+        const float y = std::sin(angle0);
 
         const float pos_x = params.center_x + x * params.radius;
         const float pos_y = params.center_y + y * params.radius;
 
-        dbasic::Vertex *newVertex = writeVertex();
+        EngineSimVertex *newVertex = writeVertex();
         newVertex->Normal.Set(0, 0, 1, 0);
         newVertex->Pos.Set(pos_x, pos_y, 0.0f, 1.0f);
         newVertex->TexCoord.x = 0.5f * x + 0.5f;
@@ -622,12 +633,12 @@ bool GeometryGenerator::generateCam(const Cam2dParameters &params) {
 
     startSubshape();
 
-    float angle = std::asinf(params.maxEdgeLength / (2 * params.baseRadius)) * 2;
+    float angle = std::asin(params.maxEdgeLength / (2 * params.baseRadius)) * 2;
     angle = std::fminf(angle, ysMath::Constants::PI - params.smallestAngle);
 
     const float steps = ysMath::Constants::TWO_PI / angle;
 
-    int segmentCount = (int)std::ceilf(steps);
+    int segmentCount = (int)std::ceil(steps);
     segmentCount = (segmentCount < 3)
         ? 3
         : segmentCount;
@@ -641,7 +652,7 @@ bool GeometryGenerator::generateCam(const Cam2dParameters &params) {
     }
 
     // Generate center vertex
-    dbasic::Vertex *centerVertex = writeVertex();
+    EngineSimVertex *centerVertex = writeVertex();
     centerVertex->Normal = ysMath::Constants::ZAxis;
     centerVertex->Pos = ysMath::LoadVector(params.center_x, params.center_y);
     centerVertex->TexCoord = ysVector2(0.5f, 0.5f);
@@ -657,8 +668,8 @@ bool GeometryGenerator::generateCam(const Cam2dParameters &params) {
 
     for (int i = 0; i < segmentCount; ++i) {
         const float angle0 = angleStep * i;
-        const float x = std::cosf(angle0 + ysMath::Constants::PI / 2);
-        const float y = std::sinf(angle0 + ysMath::Constants::PI / 2);
+        const float x = std::cos(angle0 + ysMath::Constants::PI / 2);
+        const float y = std::sin(angle0 + ysMath::Constants::PI / 2);
 
         const float lift = (params.lift == nullptr)
             ? 0.0f
@@ -698,7 +709,7 @@ bool GeometryGenerator::generateCam(const Cam2dParameters &params) {
         const float prev_x = positions_x[prev_i], prev_y = positions_y[prev_i];
         const float next_x = positions_x[next_i], next_y = positions_y[next_i];
 
-        dbasic::Vertex *newVertex = writeVertex();
+        EngineSimVertex *newVertex = writeVertex();
         newVertex->Normal.Set(0, 0, 1, 0);
         newVertex->Pos.Set((prev_x + next_x) / 2, (prev_y + next_y) / 2, 0.0f, 1.0f);
         newVertex->TexCoord.x = 0.0f;
@@ -722,7 +733,7 @@ bool GeometryGenerator::generateRhombus(const Rhombus2dParameters &params) {
         return false;
     }
 
-    dbasic::Vertex *vertex;
+    EngineSimVertex *vertex;
 
     vertex = writeVertex();
     vertex->Normal = ysMath::Constants::ZAxis;
@@ -765,7 +776,7 @@ bool GeometryGenerator::generateTrapezoid2d(const Trapezoid2dParameters &params)
         return false;
     }
 
-    dbasic::Vertex *vertex;
+    EngineSimVertex *vertex;
 
     vertex = writeVertex();
     vertex->Normal = ysMath::Constants::ZAxis;
@@ -809,7 +820,7 @@ bool GeometryGenerator::generateIsoscelesTriangle(
         return false;
     }
 
-    dbasic::Vertex *vertex;
+    EngineSimVertex *vertex;
 
     vertex = writeVertex();
     vertex->Normal = ysMath::Constants::ZAxis;
@@ -828,6 +839,24 @@ bool GeometryGenerator::generateIsoscelesTriangle(
 
     writeFace(0, 1, 2);
 
+    return true;
+}
+
+bool GeometryGenerator::generateRawMesh(
+    const EngineSimVertex *vertices,
+    int vertexCount,
+    const unsigned short *indices,
+    int indexCount)
+{
+    if (vertices == nullptr || indices == nullptr || vertexCount <= 0 || indexCount <= 0 || indexCount % 3 != 0
+        || !checkCapacity(vertexCount, indexCount)) return false;
+    startSubshape();
+    std::memcpy(m_vertexData + m_state.vertexPointer, vertices, sizeof(EngineSimVertex) * vertexCount);
+    std::memcpy(m_indexData + m_state.indexPointer, indices, sizeof(unsigned short) * indexCount);
+    for (int i = 0; i < indexCount; ++i) m_indexData[m_state.indexPointer + i] += m_state.subshapeVertexPointer;
+    m_state.vertexPointer += vertexCount;
+    m_state.indexPointer += indexCount;
+    m_state.currentShape.FaceCount += indexCount / 3;
     return true;
 }
 
@@ -854,7 +883,7 @@ bool GeometryGenerator::startPath(PathParameters &params) {
         return false;
     }
 
-    dbasic::Vertex *vertex;
+    EngineSimVertex *vertex;
 
     vertex = writeVertex();
     vertex->Normal = ysMath::Constants::ZAxis;
@@ -889,7 +918,7 @@ bool GeometryGenerator::generatePathSegment(PathParameters &params, bool detache
     const int i0 = (params.i >= params.n0) ? (params.i - params.n0) : params.i;
 
     if (params.i == n - 1) {
-        dbasic::Vertex *vertex;
+        EngineSimVertex *vertex;
         vertex = writeVertex();
         vertex->Normal = ysMath::Constants::ZAxis;
         vertex->Pos = ysMath::LoadVector(
@@ -934,7 +963,7 @@ bool GeometryGenerator::generatePathSegment(PathParameters &params, bool detache
         perp_y /= perp_l;
     }
 
-    dbasic::Vertex *vertex;
+    EngineSimVertex *vertex;
 
     vertex = writeVertex();
     vertex->Normal = ysMath::Constants::ZAxis;
@@ -965,7 +994,7 @@ bool GeometryGenerator::generatePathSegment(PathParameters &params, bool detache
     return true;
 }
 
-dbasic::Vertex *GeometryGenerator::writeVertex() {
+EngineSimVertex *GeometryGenerator::writeVertex() {
     return &m_vertexData[m_state.vertexPointer++];
 }
 
@@ -1003,7 +1032,7 @@ bool GeometryGenerator::checkCapacity(int vertexCount, int indexCount) {
 ysVector GeometryGenerator::findOrthogonal(const ysVector &v) {
     ysVector base = ysMath::Constants::XAxis;
     const float s = ysMath::GetScalar(ysMath::Dot(v, base));
-    if (abs(s) > 0.99f) {
+    if (std::abs(s) > 0.99f) {
         base = ysMath::Constants::YAxis;
     }
 

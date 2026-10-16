@@ -3,6 +3,9 @@ workspace/
 
 # Build directory
 build/
+_CPack_Packages/
+open-engine-simulator-*.zip
+open-engine-simulator-*.tar.gz
 
 # clangd cache and code completion files
 .cache
@@ -10,3 +13,8 @@ compile_commands.json
 
 # Blender temporary files
 *.blend1
+
+*.DS_Store
+error_log.log
+node_modules/
+assets/.trainer_scripts/

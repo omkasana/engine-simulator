@@ -1,4 +1,3 @@
-#include "..\include\engine.h"
 #include "../include/engine.h"
 
 #include "../include/constants.h"
@@ -287,6 +286,8 @@ void Engine::calculateDisplacement() {
     }
 
     m_displacement = displacement;
+    delete[] min_s;
+    delete[] max_s;
 }
 
 double Engine::getIntakeFlowRate() const {
@@ -383,11 +384,15 @@ int Engine::getMaxDepth() const {
     return maxDepth;
 }
 
-Simulator *Engine::createSimulator(Vehicle *vehicle, Transmission *transmission) {
+Simulator *Engine::createSimulator(
+    Vehicle *vehicle, Transmission *transmission, int outputAudioSampleRate)
+{
+    calculateDisplacement();
     PistonEngineSimulator *simulator = new PistonEngineSimulator;
     Simulator::Parameters simulatorParams;
     simulatorParams.systemType = Simulator::SystemType::NsvOptimized;
     simulator->initialize(simulatorParams);
+    simulator->setOutputAudioSampleRate(outputAudioSampleRate);
 
     simulator->loadSimulation(this, vehicle, transmission);
     simulator->setFluidSimulationSteps(8);

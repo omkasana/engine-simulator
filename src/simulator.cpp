@@ -10,7 +10,9 @@ Simulator::Simulator() {
 
     m_simulationSpeed = 1.0;
     m_targetSynthesizerLatency = 0.1;
+    m_synthesizerLatencyCorrectionEnabled = true;
     m_simulationFrequency = 10000;
+    m_outputAudioSampleRate = 44100;
     m_steps = 0;
 
     m_currentIteration = 0;
@@ -74,14 +76,16 @@ void Simulator::startFrame(double dt) {
     const double timestep = getTimestep();
     m_steps = (int)std::round((dt * m_simulationSpeed) / timestep);
 
-    const double targetLatency = getSynthesizerInputLatencyTarget();
-    if (m_synthesizer.getLatency() < targetLatency) {
-        m_steps = static_cast<int>((m_steps + 1) * 1.1);
-    }
-    else if (m_synthesizer.getLatency() > targetLatency) {
-        m_steps = static_cast<int>((m_steps - 1) * 0.9);
-        if (m_steps < 0) {
-            m_steps = 0;
+    if (m_synthesizerLatencyCorrectionEnabled) {
+        const double targetLatency = getSynthesizerInputLatencyTarget();
+        if (m_synthesizer.getLatency() < targetLatency) {
+            m_steps = static_cast<int>((m_steps + 1) * 1.1);
+        }
+        else if (m_synthesizer.getLatency() > targetLatency) {
+            m_steps = static_cast<int>((m_steps - 1) * 0.9);
+            if (m_steps < 0) {
+                m_steps = 0;
+            }
         }
     }
 
@@ -166,6 +170,8 @@ void Simulator::endFrame() {
 
 void Simulator::destroy() {
     m_synthesizer.destroy();
+    delete[] m_dynoTorqueSamples;
+    m_dynoTorqueSamples = nullptr;
 }
 
 void Simulator::startAudioRenderingThread() {
@@ -204,10 +210,16 @@ double Simulator::getAverageOutputSignal() const {
 void Simulator::initializeSynthesizer() {
     Synthesizer::Parameters synthParams;
     synthParams.audioBufferSize = 44100;
-    synthParams.audioSampleRate = 44100;
+    synthParams.audioSampleRate = m_outputAudioSampleRate;
     synthParams.inputBufferSize = 44100;
     synthParams.inputChannelCount = m_engine->getExhaustSystemCount();
     synthParams.inputSampleRate = static_cast<float>(getSimulationFrequency());
+    synthParams.initialAudioParameters.dF_F_mix =
+        static_cast<float>(m_engine->getInitialHighFrequencyGain());
+    synthParams.initialAudioParameters.inputSampleNoise =
+        static_cast<float>(m_engine->getInitialJitter());
+    synthParams.initialAudioParameters.airNoise =
+        static_cast<float>(m_engine->getInitialNoise());
     m_synthesizer.initialize(synthParams);
 }
 

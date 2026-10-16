@@ -2,8 +2,10 @@
 #define ATG_ENGINE_SIM_UI_MANAGER_H
 
 #include "ui_element.h"
+#include "overlay_host.h"
+#include "desktop_platform.h"
 
-#include <vector>
+#include <unordered_map>
 
 class EngineSimApplication;
 class UiManager {
@@ -11,26 +13,40 @@ class UiManager {
         UiManager();
         ~UiManager();
 
-        void initialize(EngineSimApplication *app);
+        void initialize(EngineSimApplication *app, DesktopPlatform *platform);
         void destroy();
 
         void update(float dt);
         void render();
 
         UiElement *getRoot() { return &m_root; }
+        void showTrainerOverlay();
+        void dismissOverlay() { m_overlayHost.dismiss(); }
+        void showControlsOverlay();
+        void showEnginePickerOverlay();
+        bool hasOverlay() const { return m_overlayHost.isVisible(); }
 
     protected:
+        struct TouchDrag {
+            UiElement *element;
+            Point elementPosition;
+            Point startPosition;
+        };
+
         UiElement m_root;
+        OverlayHost m_overlayHost;
 
         UiElement *m_dragStart;
         UiElement *m_hover;
         Point m_mouse_p0;
         Point m_drag_p0;
-
-        int m_lastMouseScroll;
+        std::unordered_map<std::uint64_t, TouchDrag> m_touchDrags;
 
     protected:
         EngineSimApplication *m_app;
+        DesktopPlatform *m_platform;
+
+        UiElement *hitTest(const Point &position);
 };
 
 #endif /* ATG_ENGINE_SIM_UI_MANAGER_H */

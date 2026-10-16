@@ -38,7 +38,7 @@ public:
     virtual void startFrame(double dt);
     bool simulateStep();
     virtual double getTotalExhaustFlow() const;
-    int readAudioOutput(int samples, int16_t *target);
+    virtual int readAudioOutput(int samples, int16_t *target);
     virtual void endFrame();
     virtual void destroy();
 
@@ -56,12 +56,18 @@ public:
 
     void setSimulationFrequency(int frequency) { m_simulationFrequency = frequency; }
     int getSimulationFrequency() const { return m_simulationFrequency; }
+    void setOutputAudioSampleRate(int sampleRate) { m_outputAudioSampleRate = sampleRate; }
 
     double getTimestep() const { return 1.0 / m_simulationFrequency; }
 
     void setTargetSynthesizerLatency(double latency) { m_targetSynthesizerLatency = latency; }
     double getTargetSynthesizerLatency() const { return m_targetSynthesizerLatency; }
+    // Variable-rate hosts may use this reservoir correction; real-time pull
+    // audio keeps simulation time monotonic to avoid discrete pitch changes.
+    void setSynthesizerLatencyCorrectionEnabled(bool enabled) { m_synthesizerLatencyCorrectionEnabled = enabled; }
+    void setMaximumSynthesizerInputLatency(double seconds) { m_synthesizer.setMaximumInputLatency(seconds); }
     double getSynthesizerInputLatency() const { return m_synthesizer.getLatency(); }
+    double getSynthesizerOutputLatency() const { return m_synthesizer.getAudioOutputLatency(); }
     double getSynthesizerInputLatencyTarget() const;
 
     void setSimulationSpeed(double simSpeed) { m_simulationSpeed = simSpeed; }
@@ -107,8 +113,10 @@ private:
     double m_physicsProcessingTime;
 
     int m_simulationFrequency;
+    int m_outputAudioSampleRate;
 
     double m_targetSynthesizerLatency;
+    bool m_synthesizerLatencyCorrectionEnabled;
     double m_simulationSpeed;
 
     double *m_dynoTorqueSamples;
