@@ -67,9 +67,11 @@ if(WIN32)
     install(FILES "$<TARGET_FILE:SDL3::SDL3>"
         DESTINATION "${ENGINE_SIM_INSTALL_LIBRARY_DIRECTORY}")
 elseif(UNIX AND NOT APPLE)
-    # Install the SONAME filename the executable requests (for example,
-    # libSDL3.so.0), not only SDL's fully versioned build artifact.
-    install(FILES "$<TARGET_SONAME_FILE:SDL3::SDL3>"
+    # Install both the real SDL shared library and its SONAME symlink.
+    # The executable loads libSDL3.so.0, which points to the versioned library.
+    install(FILES
+        "$<TARGET_FILE:SDL3::SDL3>"
+        "$<TARGET_SONAME_FILE:SDL3::SDL3>"
         DESTINATION "${ENGINE_SIM_INSTALL_LIBRARY_DIRECTORY}")
 endif()
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/assets/" DESTINATION "${ENGINE_SIM_INSTALL_ASSET_DIRECTORY}"
