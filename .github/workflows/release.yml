@@ -114,34 +114,109 @@ jobs:
         shell: pwsh
         run: |
           $packageDirectory = "$env:GITHUB_WORKSPACE/build/${{ matrix.preset }}"
-          $installer = Get-ChildItem $packageDirectory -Filter 'open-engine-simulator-*.exe' | Select-Object -First 1
-          $archive = Get-ChildItem $packageDirectory -Filter 'open-engine-simulator-*.zip' | Select-Object -First 1
-          if (-not $installer -or -not $archive) { throw 'Windows installer or portable archive is missing' }
+
+          $installer = Get-ChildItem $packageDirectory -Filter 'open-engine-simulator-*.exe' |
+            Select-Object -First 1
+
+          $archive = Get-ChildItem $packageDirectory -Filter 'open-engine-simulator-*.zip' |
+            Select-Object -First 1
+
+          if (-not $installer -or -not $archive) {
+            throw 'Windows installer or portable archive is missing'
+          }
+
+          Write-Host "Installer: $($installer.FullName)"
+          Write-Host "Archive:   $($archive.FullName)"
+
           $listing = & 7z l $archive.FullName
-          if ($LASTEXITCODE -ne 0 -or $listing -notmatch 'engine-sim-desktop.exe') { throw 'Portable archive has no desktop executable' }
-          if ($listing -notmatch 'SDL3.dll') { throw 'Portable archive has no SDL3 runtime' }
-          if ($listing -notmatch 'assets[/\\]main.mr') { throw 'Portable archive has no engine assets' }
+
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Unable to inspect Windows portable archive'
+          }
+
+          $listingText = $listing -join "`n"
+
+          if ($listingText -notmatch 'engine-sim-desktop\.exe') {
+            throw 'Portable archive has no desktop executable'
+          }
+
+          if ($listingText -notmatch 'SDL3\.dll') {
+            throw 'Portable archive has no SDL3 runtime'
+          }
+
+          if ($listingText -notmatch 'assets[/\\]main\.mr') {
+            throw 'Portable archive has no engine assets'
+          }
+
+          Write-Host 'Windows package verification passed.'
 
       - name: Verify Linux packages
         if: runner.os == 'Linux'
         shell: bash
         run: |
           package_directory="$GITHUB_WORKSPACE/build/${{ matrix.preset }}"
-          deb=$(find "$package_directory" -maxdepth 1 -name 'open-engine-simulator-*.deb' -print -quit)
-          archive=$(find "$package_directory" -maxdepth 1 -name 'open-engine-simulator-*.tar.gz' -print -quit)
+
+          deb=$(find "$package_directory" -maxdepth 1 \
+            -name 'open-engine-simulator-*.deb' -print -quit)
+
+          archive=$(find "$package_directory" -maxdepth 1 \
+            -name 'open-engine-simulator-*.tar.gz' -print -quit)
+
           test -n "$deb"
           test -n "$archive"
+
+          echo "DEB: $deb"
+          echo "Archive: $archive"
+
           dpkg-deb --info "$deb"
-          dpkg-deb --contents "$deb" | grep 'usr/bin/engine-sim-desktop'
+
+          dpkg-deb --contents "$deb" > deb-contents.txt
+
+          if ! grep -q 'usr/bin/engine-sim-desktop' deb-contents.txt; then
+            echo "Linux DEB has no desktop executable"
+            exit 1
+          fi
+
+          rm -rf package-check-linux
           mkdir package-check-linux
+
           tar -xzf "$archive" -C package-check-linux
-          executable=$(find package-check-linux -type f -name engine-sim-desktop -print -quit)
-          sdl=$(find package-check-linux -type f -name 'libSDL3.so*' -print -quit)
-          assets=$(find package-check-linux -type f -path '*/assets/main.mr' -print -quit)
+
+          executable=$(find package-check-linux \
+            -type f \
+            -name 'engine-sim-desktop' \
+            -print -quit)
+
+          sdl=$(find package-check-linux \
+            -name 'libSDL3.so*' \
+            -print -quit)
+
+          assets=$(find package-check-linux \
+            -type f \
+            -path '*/assets/main.mr' \
+            -print -quit)
+
+          echo "Executable: $executable"
+          echo "SDL runtime: $sdl"
+          echo "Assets: $assets"
+
+          test -n "$executable"
           test -x "$executable"
+
           test -n "$sdl"
+          test -e "$sdl"
+
           test -n "$assets"
-          readelf -d "$executable" | grep '\$ORIGIN/../lib/open-engine-simulator'
+
+          readelf -d "$executable" > readelf-dynamic.txt
+
+          if ! grep -q '\$ORIGIN/../lib/open-engine-simulator' readelf-dynamic.txt; then
+            echo "Linux executable does not contain the expected portable RPATH"
+            cat readelf-dynamic.txt
+            exit 1
+          fi
+
+          echo "Linux package verification passed."
 
       - name: Upload package
         uses: actions/upload-artifact@v4
