@@ -3,9 +3,9 @@ name: Portable CMake checks
 on:
   workflow_dispatch:
   push:
-    branches: [ "main", "master" ]
+    branches: ["main", "master"]
   pull_request:
-    branches: [ "main", "master" ]
+    branches: ["main", "master"]
 
 jobs:
   validate:
@@ -16,7 +16,7 @@ jobs:
       matrix:
         include:
           - name: Linux x86_64
-            os: ubuntu-latest
+            os: ubuntu-24.04
             preset: linux-x86_64-ci
           # Pin an Apple-Silicon host: macos-latest is arm64 today, but an
           # explicit version makes the architecture and CI target unambiguous.
@@ -42,14 +42,23 @@ jobs:
 
       - name: Install Windows parser tools
         if: runner.os == 'Windows'
+        shell: pwsh
         run: |
           choco install winflexbison3 --no-progress --yes
-          if (-not (Get-Command win_flex.exe -ErrorAction SilentlyContinue)) {
-            throw "winflexbison3 did not provide win_flex.exe"
+
+          $flex = "C:\ProgramData\chocolatey\bin\win_flex.exe"
+          $bison = "C:\ProgramData\chocolatey\bin\win_bison.exe"
+
+          if (-not (Test-Path $flex)) {
+            throw "win_flex.exe was not installed at $flex"
           }
-          if (-not (Get-Command win_bison.exe -ErrorAction SilentlyContinue)) {
-            throw "winflexbison3 did not provide win_bison.exe"
+
+          if (-not (Test-Path $bison)) {
+            throw "win_bison.exe was not installed at $bison"
           }
+
+          Write-Host "Flex:  $flex"
+          Write-Host "Bison: $bison"
 
       - name: Install Linux desktop dependencies
         if: runner.os == 'Linux'
@@ -60,7 +69,16 @@ jobs:
             libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev \
             libxi-dev libxss-dev libxkbcommon-dev libwayland-dev libdecor-0-dev
 
-      - name: Configure
+      - name: Configure Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cmake --preset ${{ matrix.preset }} `
+            -DFLEX_EXECUTABLE="C:/ProgramData/chocolatey/bin/win_flex.exe" `
+            -DBISON_EXECUTABLE="C:/ProgramData/chocolatey/bin/win_bison.exe"
+
+      - name: Configure macOS and Linux
+        if: runner.os != 'Windows'
         run: cmake --preset ${{ matrix.preset }}
 
       - name: Build
@@ -78,7 +96,7 @@ jobs:
 
   validate-web:
     name: Validate (WebAssembly/WebGL 2)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:

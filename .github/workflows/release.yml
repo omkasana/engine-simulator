@@ -60,7 +60,23 @@ jobs:
 
       - name: Install Windows parser tools
         if: runner.os == 'Windows'
-        run: choco install winflexbison3 nsis --no-progress --yes
+        shell: pwsh
+        run: |
+          choco install winflexbison3 nsis --no-progress --yes
+
+          $chocoBin = "C:\ProgramData\chocolatey\bin"
+          $chocoBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+          if (-not (Test-Path "$chocoBin\win_flex.exe")) {
+            throw "win_flex.exe was not installed"
+          }
+
+          if (-not (Test-Path "$chocoBin\win_bison.exe")) {
+            throw "win_bison.exe was not installed"
+          }
+
+          Write-Host "Flex:  $chocoBin\win_flex.exe"
+          Write-Host "Bison: $chocoBin\win_bison.exe"
 
       - name: Install Linux desktop dependencies
         if: runner.os == 'Linux'
@@ -72,7 +88,16 @@ jobs:
             libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev \
             libxi-dev libxss-dev libxkbcommon-dev libwayland-dev libdecor-0-dev
 
-      - name: Configure
+      - name: Configure Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cmake --preset ${{ matrix.preset }} `
+            -DFLEX_EXECUTABLE="C:/ProgramData/chocolatey/bin/win_flex.exe" `
+            -DBISON_EXECUTABLE="C:/ProgramData/chocolatey/bin/win_bison.exe"
+
+      - name: Configure macOS and Linux
+        if: runner.os != 'Windows'
         run: cmake --preset ${{ matrix.preset }}
 
       - name: Build
@@ -227,7 +252,7 @@ jobs:
 
   build-web:
     name: Build web app
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -259,7 +284,7 @@ jobs:
     name: Create GitHub release
     needs: package-desktop
     if: github.event_name == 'push' || inputs.publish
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -292,7 +317,7 @@ jobs:
     name: Publish web build
     needs: [build-web, release]
     if: inputs.publish_web
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
