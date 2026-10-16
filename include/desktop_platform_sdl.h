@@ -41,6 +41,7 @@ public:
     std::uint64_t ticks() const override;
     void delay(std::uint32_t milliseconds) const override;
     std::string applicationDirectory() const override;
+    std::string preferencesDirectory() const override;
     std::string lastError() const override;
 
 private:

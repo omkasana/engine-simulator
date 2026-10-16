@@ -429,3 +429,12 @@ void LoadSimulationCluster::setUnits(){
         m_hpGauge->m_gauge->m_majorStep = 100;
     }
 }
+
+void LoadSimulationCluster::setUnits(
+    const std::string &powerUnits,
+    const std::string &torqueUnits)
+{
+    m_powerUnits = powerUnits;
+    m_torqueUnits = torqueUnits;
+    setUnits();
+}

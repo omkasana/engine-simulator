@@ -23,12 +23,14 @@ add_executable(engine-sim-core-tests
     test/shaders_test.cpp
     test/synthesizer_tests.cpp
     test/text_renderer_test.cpp
+    test/user_preferences_test.cpp
     test/wav_postprocess_test.cpp
     test/authored_mesh_library_test.cpp
     test/engine_catalog_test.cpp
     src/text_renderer.cpp
     src/authored_mesh_library.cpp
     src/engine_catalog.cpp)
+target_sources(engine-sim-core-tests PRIVATE src/user_preferences.cpp)
 if(ENGINE_SIM_BUILD_SCRIPTING)
     target_sources(engine-sim-core-tests PRIVATE test/script_compile_test.cpp test/engine_startup_test.cpp)
     target_link_libraries(engine-sim-core-tests PRIVATE engine-sim-scripting)
@@ -37,7 +39,7 @@ if(ENGINE_SIM_BUILD_SCRIPTING)
         ATG_ENGINE_SIM_PIRANHA_ENABLED)
 endif()
 target_link_libraries(engine-sim-core-tests
-    PRIVATE engine-sim::core engine-sim-render-support csv-io gtest_main)
+    PRIVATE engine-sim-render-support csv-io gtest_main)
 target_include_directories(engine-sim-core-tests
     PRIVATE
         "${ENGINE_SIM_SUBMODULE_DIR}/csv-io/include"

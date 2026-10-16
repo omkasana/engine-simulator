@@ -7,7 +7,7 @@
 
 InfoCluster::InfoCluster()
     : m_engine(nullptr), m_projectInfoButton(nullptr), m_enginePickerButton(nullptr),
-      m_fullscreenButton(nullptr), m_logMessage("Started") { }
+      m_settingsButton(nullptr), m_fullscreenButton(nullptr), m_logMessage("Started") { }
 
 InfoCluster::~InfoCluster() = default;
 
@@ -24,6 +24,12 @@ void InfoCluster::initialize(EngineSimApplication *app) {
     m_enginePickerButton->m_fontSize = 16.0f;
     m_enginePickerButton->m_inverted = true;
     m_enginePickerButton->m_drawFrame = false;
+
+    m_settingsButton = addElement<UiButton>(this);
+    m_settingsButton->m_text = "SETTINGS";
+    m_settingsButton->m_fontSize = 16.0f;
+    m_settingsButton->m_inverted = true;
+    m_settingsButton->m_drawFrame = false;
 
     m_trainerButton = addElement<UiButton>(this);
     m_trainerButton->m_text = "ENGINE";
@@ -43,10 +49,22 @@ void InfoCluster::update(float dt) {
     Grid grid = { 6, 4 };
     const Bounds titleBounds = grid.get(m_bounds, 1, 0, 5, 2);
     const Bounds toolbar = titleBounds.verticalSplit(0.0f, 0.24f);
-    m_trainerButton->m_bounds = toolbar.horizontalSplit(0.32f, 0.46f);
-    m_enginePickerButton->m_bounds = toolbar.horizontalSplit(0.47f, 0.60f);
-    m_projectInfoButton->m_bounds = toolbar.horizontalSplit(0.61f, 0.74f);
-    m_fullscreenButton->m_bounds = toolbar.horizontalSplit(0.75f, 1.0f);
+    const bool modern = m_app->getUserPreferences().uiStyle == UiStyle::Modern;
+    m_trainerButton->setVisible(!m_app->trainerSession().empty());
+    m_settingsButton->setVisible(modern);
+    if (modern) {
+        m_trainerButton->m_bounds = toolbar.horizontalSplit(0.22f, 0.36f);
+        m_enginePickerButton->m_bounds = toolbar.horizontalSplit(0.37f, 0.50f);
+        m_settingsButton->m_bounds = toolbar.horizontalSplit(0.51f, 0.67f);
+        m_projectInfoButton->m_bounds = toolbar.horizontalSplit(0.68f, 0.80f);
+        m_fullscreenButton->m_bounds = toolbar.horizontalSplit(0.81f, 1.0f);
+    }
+    else {
+        m_trainerButton->m_bounds = toolbar.horizontalSplit(0.32f, 0.46f);
+        m_enginePickerButton->m_bounds = toolbar.horizontalSplit(0.47f, 0.60f);
+        m_projectInfoButton->m_bounds = toolbar.horizontalSplit(0.61f, 0.74f);
+        m_fullscreenButton->m_bounds = toolbar.horizontalSplit(0.75f, 1.0f);
+    }
     UiElement::update(dt);
 }
 
@@ -56,6 +74,7 @@ void InfoCluster::signal(UiElement *element, Event event) {
     else if (element == m_fullscreenButton) m_app->toggleFullscreen();
     else if (element == m_projectInfoButton) m_app->showControlsOverlay();
     else if (element == m_enginePickerButton) m_app->showEnginePickerOverlay();
+    else if (element == m_settingsButton) m_app->showSettingsOverlay();
 }
 
 void InfoCluster::render() {
@@ -100,10 +119,23 @@ void InfoCluster::render() {
     std::stringstream specs;
     if (m_engine != nullptr) {
         specs << std::fixed;
-        if (m_engine->getDisplacement() < units::volume(1.0, units::L))
-            specs << std::setprecision(0) << units::convert(m_engine->getDisplacement(), units::cc) << " cc -- ";
-        else specs << std::setprecision(1) << units::convert(m_engine->getDisplacement(), units::L) << " L -- ";
-        specs << std::setprecision(0) << units::convert(m_engine->getDisplacement(), units::cubic_inches) << " CI";
+        const UserPreferences &preferences = m_app->getUserPreferences();
+        if (preferences.uiStyle == UiStyle::Legacy) {
+            if (m_engine->getDisplacement() < units::volume(1.0, units::L))
+                specs << std::setprecision(0) << units::convert(m_engine->getDisplacement(), units::cc) << " cc -- ";
+            else specs << std::setprecision(1) << units::convert(m_engine->getDisplacement(), units::L) << " L -- ";
+            specs << std::setprecision(0)
+                  << units::convert(m_engine->getDisplacement(), units::cubic_inches) << " CI";
+        }
+        else if (preferences.unitSystem == UnitSystem::Metric) {
+            if (m_engine->getDisplacement() < units::volume(1.0, units::L))
+                specs << std::setprecision(0) << units::convert(m_engine->getDisplacement(), units::cc) << " cc";
+            else specs << std::setprecision(1) << units::convert(m_engine->getDisplacement(), units::L) << " L";
+        }
+        else {
+            specs << std::setprecision(0)
+                  << units::convert(m_engine->getDisplacement(), units::cubic_inches) << " CI";
+        }
     }
     else specs << "N/A";
     drawAlignedText(specs.str(), engineInfoBounds.horizontalSplit(0.66f, 1.0f).inset(10.0f),

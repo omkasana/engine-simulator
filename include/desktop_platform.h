@@ -67,6 +67,7 @@ public:
     virtual std::uint64_t ticks() const = 0;
     virtual void delay(std::uint32_t milliseconds) const = 0;
     virtual std::string applicationDirectory() const = 0;
+    virtual std::string preferencesDirectory() const { return {}; }
     virtual std::string lastError() const = 0;
 };
 

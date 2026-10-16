@@ -24,3 +24,21 @@ TEST(TextRenderer, MeasuresLinesAndEmitsBitmapRuns) {
     EXPECT_GT(firstRunX, 10.0f);
     EXPECT_FLOAT_EQ(renderer.CalculateWidth("A\n12", 14.0f), 18.333334f);
 }
+
+TEST(TextRenderer, DecodesUtf8CurrencySymbolsAsSingleCodepoints) {
+    TextRenderer renderer;
+    ASSERT_TRUE(renderer.loadFont(
+        std::string(ENGINE_SIM_TEST_SOURCE_DIRECTORY)
+        + "/assets/fonts/Inter.ttf"));
+
+    int runCount = 0;
+    renderer.setRenderCallback([&](const std::vector<TextRenderer::Run> &runs, const ysVector &) {
+        runCount += static_cast<int>(runs.size());
+    });
+    renderer.RenderText(u8"₹105.00", 0.0f, 0.0f, 18.0f);
+
+    EXPECT_GT(runCount, 0);
+    EXPECT_GT(renderer.CalculateWidth(u8"₹", 18.0f), 0.0f);
+    EXPECT_LT(renderer.CalculateWidth(u8"₹", 18.0f),
+              renderer.CalculateWidth("$$$", 18.0f));
+}

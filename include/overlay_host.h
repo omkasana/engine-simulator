@@ -13,6 +13,7 @@ public:
         None,
         Controls,
         EnginePicker,
+        Settings,
         Trainer
     };
 
@@ -34,6 +35,18 @@ private:
     UiButton *m_issuesButton = nullptr;
     UiButton *m_pickerScrollUpButton = nullptr;
     UiButton *m_pickerScrollDownButton = nullptr;
+    UiButton *m_legacyUiButton = nullptr;
+    UiButton *m_modernUiButton = nullptr;
+    UiButton *m_imperialButton = nullptr;
+    UiButton *m_metricButton = nullptr;
+    UiButton *m_currencyPreviousButton = nullptr;
+    UiButton *m_currencyButton = nullptr;
+    UiButton *m_currencyNextButton = nullptr;
+    UiButton *m_priceMinusLargeButton = nullptr;
+    UiButton *m_priceMinusButton = nullptr;
+    UiButton *m_pricePlusButton = nullptr;
+    UiButton *m_pricePlusLargeButton = nullptr;
+    UiButton *m_resetSettingsButton = nullptr;
     std::vector<UiButton *> m_engineButtons;
     Kind m_kind = Kind::None;
     float m_pickerScrollOffset = 0.0f;
@@ -43,6 +56,8 @@ private:
     Bounds dialogBounds() const;
     void layoutControls(const Bounds &panel);
     void layoutEnginePicker(const Bounds &panel);
+    void layoutSettings(const Bounds &panel);
+    void syncSettingsLabels();
     void setChildrenVisible();
 };
 

@@ -17,6 +17,13 @@ if(ENGINE_SIM_BUILD_SCRIPTING)
     target_compile_definitions(engine-sim-desktop PRIVATE ATG_ENGINE_SIM_PIRANHA_ENABLED)
 endif()
 
+# Keep Windows launches graphical: packaged users should not see a console
+# window behind the simulator. SDL provides the appropriate platform entry
+# point while desktop_main.cpp remains portable.
+if(WIN32)
+    set_target_properties(engine-sim-desktop PROPERTIES WIN32_EXECUTABLE TRUE)
+endif()
+
 engine_sim_add_shader_artifacts(engine-sim-shaders
     "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/engine_sim.hlsl"
     "${CMAKE_CURRENT_BINARY_DIR}/shaders")
@@ -27,7 +34,8 @@ endif()
 if(APPLE)
     set_target_properties(engine-sim-desktop PROPERTIES INSTALL_RPATH "@executable_path")
 elseif(UNIX)
-    set_target_properties(engine-sim-desktop PROPERTIES INSTALL_RPATH "$ORIGIN")
+    set_target_properties(engine-sim-desktop PROPERTIES
+        INSTALL_RPATH "$ORIGIN/../lib/open-engine-simulator")
 endif()
 
 if(APPLE AND ENGINE_SIM_MACOS_APP_BUNDLE)
@@ -44,13 +52,25 @@ if(APPLE AND ENGINE_SIM_MACOS_APP_BUNDLE)
     set(ENGINE_SIM_INSTALL_RUNTIME_DIRECTORY "engine-sim.app/Contents/MacOS")
     install(TARGETS engine-sim-desktop BUNDLE DESTINATION .)
 else()
-    set(ENGINE_SIM_INSTALL_ASSET_DIRECTORY "assets")
     set(ENGINE_SIM_INSTALL_RUNTIME_DIRECTORY "bin")
+    if(UNIX AND NOT APPLE)
+        set(ENGINE_SIM_INSTALL_ASSET_DIRECTORY "share/open-engine-simulator/assets")
+        set(ENGINE_SIM_INSTALL_LIBRARY_DIRECTORY "lib/open-engine-simulator")
+    else()
+        set(ENGINE_SIM_INSTALL_ASSET_DIRECTORY "assets")
+        set(ENGINE_SIM_INSTALL_LIBRARY_DIRECTORY "${ENGINE_SIM_INSTALL_RUNTIME_DIRECTORY}")
+    endif()
     install(TARGETS engine-sim-desktop RUNTIME DESTINATION "${ENGINE_SIM_INSTALL_RUNTIME_DIRECTORY}")
 endif()
 
-if(NOT (APPLE AND ENGINE_SIM_MACOS_APP_BUNDLE))
-    install(FILES "$<TARGET_FILE:SDL3::SDL3>" DESTINATION "${ENGINE_SIM_INSTALL_RUNTIME_DIRECTORY}")
+if(WIN32)
+    install(FILES "$<TARGET_FILE:SDL3::SDL3>"
+        DESTINATION "${ENGINE_SIM_INSTALL_LIBRARY_DIRECTORY}")
+elseif(UNIX AND NOT APPLE)
+    # Install the SONAME filename the executable requests (for example,
+    # libSDL3.so.0), not only SDL's fully versioned build artifact.
+    install(FILES "$<TARGET_SONAME_FILE:SDL3::SDL3>"
+        DESTINATION "${ENGINE_SIM_INSTALL_LIBRARY_DIRECTORY}")
 endif()
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/assets/" DESTINATION "${ENGINE_SIM_INSTALL_ASSET_DIRECTORY}"
     PATTERN ".DS_Store" EXCLUDE
@@ -64,6 +84,14 @@ if(TARGET engine-sim-shaders)
         "${CMAKE_CURRENT_BINARY_DIR}/shaders/engine_sim.vertex.msl"
         "${CMAKE_CURRENT_BINARY_DIR}/shaders/engine_sim.fragment.msl"
         DESTINATION "${ENGINE_SIM_INSTALL_ASSET_DIRECTORY}/shaders")
+endif()
+
+if(UNIX AND NOT APPLE)
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/packaging/org.openenginesim.desktop.desktop"
+        DESTINATION "share/applications"
+        RENAME "org.openenginesim.desktop.desktop")
+    install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/packaging/org.openenginesim.desktop.svg"
+        DESTINATION "share/icons/hicolor/scalable/apps")
 endif()
 
 # Sign only after every bundle component has been installed. This is an ad-hoc

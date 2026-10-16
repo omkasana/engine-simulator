@@ -23,16 +23,18 @@ void UiButton::update(float dt) {
 void UiButton::render() {
     const ysVector foreground = m_app->getForegroundColor();
     const ysVector background = m_app->getBackgroundColor();
+    const bool modern = m_app->getUserPreferences().uiStyle == UiStyle::Modern;
     ysVector color = m_inverted ? foreground : background;
     if (isMouseHeld()) {
-        color = mix(color, m_inverted ? background : foreground, 0.08f);
+        color = mix(color, m_inverted ? background : foreground, modern ? 0.20f : 0.08f);
     }
     else if (isMouseOver()) {
-        color = mix(color, m_inverted ? background : foreground, 0.04f);
+        color = mix(color, m_inverted ? background : foreground, modern ? 0.10f : 0.04f);
     }
 
     if (m_drawFrame) {
-        drawFrame(m_bounds, 1.0, m_inverted ? background : foreground, color, true, m_layer);
+        drawFrame(m_bounds, modern ? 1.5f : 1.0f,
+            m_inverted ? background : foreground, color, true, m_layer);
     }
     else {
         drawBox(m_bounds, color, m_layer);

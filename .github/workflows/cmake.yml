@@ -3,9 +3,9 @@ name: Portable CMake checks
 on:
   workflow_dispatch:
   push:
-    branches: [ "master" ]
+    branches: [ "main", "master" ]
   pull_request:
-    branches: [ "master" ]
+    branches: [ "main", "master" ]
 
 jobs:
   validate:

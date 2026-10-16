@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Open Engine Simulator
+Comment=Real-time internal combustion engine sound simulator
+Exec=engine-sim-desktop
+Icon=org.openenginesim.desktop
+Terminal=false
+Categories=Game;Education;Science;
+Keywords=engine;simulator;automotive;audio;

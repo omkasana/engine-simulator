@@ -36,4 +36,16 @@ TEST_F(RuntimePathsTest, UsesDevelopmentAssetsOnlyWhenPackagedAssetsAreMissing) 
     EXPECT_EQ(paths.assetDirectory, developmentAssets);
 }
 
+TEST_F(RuntimePathsTest, FindsAssetsInInstalledLinuxShareDirectory) {
+    const std::filesystem::path executableDirectory = m_directory / "usr/bin";
+    const std::filesystem::path installedAssets =
+        m_directory / "usr/share/open-engine-simulator/assets";
+    std::filesystem::create_directories(executableDirectory);
+    std::filesystem::create_directories(installedAssets);
+
+    const RuntimePaths paths = RuntimePaths::discover(executableDirectory);
+
+    EXPECT_EQ(paths.assetDirectory.lexically_normal(), installedAssets.lexically_normal());
+}
+
 } // namespace

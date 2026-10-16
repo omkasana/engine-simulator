@@ -204,6 +204,16 @@
       }
     },
     {
+      "name": "linux-x86_64-package",
+      "displayName": "Linux x86_64 packaged desktop app",
+      "inherits": "linux-x86_64-desktop"
+    },
+    {
+      "name": "windows-x86_64-package",
+      "displayName": "Windows x86_64 packaged desktop app",
+      "inherits": "windows-x86_64-desktop"
+    },
+    {
       "name": "web",
       "displayName": "Emscripten WebGL 2 browser host",
       "inherits": "base",
@@ -285,6 +295,15 @@
     {
       "name": "macos-arm64-package",
       "configurePreset": "macos-arm64-package"
+    },
+    {
+      "name": "linux-x86_64-package",
+      "configurePreset": "linux-x86_64-package"
+    },
+    {
+      "name": "windows-x86_64-package",
+      "configurePreset": "windows-x86_64-package",
+      "configuration": "RelWithDebInfo"
     },
     {
       "name": "web",

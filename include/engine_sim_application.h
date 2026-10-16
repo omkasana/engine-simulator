@@ -22,6 +22,7 @@
 #include "info_cluster.h"
 #include "application_settings.h"
 #include "desktop_platform.h"
+#include "user_preferences.h"
 
 #include <string>
 #include <functional>
@@ -32,6 +33,7 @@
 #include "transmission.h"
 
 #include <vector>
+#include <filesystem>
 
 class EngineSimApplication {
     private:
@@ -103,6 +105,7 @@ class EngineSimApplication {
         Simulator *getSimulator() { return m_simulator; }
         InfoCluster *getInfoCluster() { return m_infoCluster; }
         ApplicationSettings* getAppSettings() { return &m_applicationSettings; }
+        const UserPreferences &getUserPreferences() const { return m_userPreferences; }
 
         void toggleIgnition();
         void toggleDynamometer();
@@ -115,6 +118,12 @@ class EngineSimApplication {
         void pollTrainerCommands();
         void showControlsOverlay();
         void showEnginePickerOverlay();
+        void showSettingsOverlay();
+        void setUiStyle(UiStyle uiStyle);
+        void setUnitSystem(UnitSystem unitSystem);
+        void cycleCurrency(int direction);
+        void adjustFuelPrice(int steps);
+        void resetUserPreferences();
         void changeGear(int direction);
         void setTouchStarterHeld(bool held);
         void setTouchThrottle(double value, bool held);
@@ -131,6 +140,8 @@ class EngineSimApplication {
         void renderScene();
 
         void refreshUserInterface();
+        void applyUserPreferences();
+        void saveUserPreferences() const;
 
     protected:
         double m_speedSetting = 1.0;
@@ -154,6 +165,9 @@ class EngineSimApplication {
         int m_screenHeight;
         
         ApplicationSettings m_applicationSettings;
+        ApplicationSettings m_scriptApplicationSettings;
+        UserPreferences m_userPreferences;
+        std::filesystem::path m_preferencesPath;
         Shaders m_shaders;
 
         DesktopPlatform *m_platform;

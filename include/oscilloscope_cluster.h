@@ -25,6 +25,10 @@ class OscilloscopeCluster : public UiElement {
 
         void sample();
         void setSimulator(Simulator *simulator);
+        void setUnits(const std::string &powerUnits, const std::string &torqueUnits) {
+            m_powerUnits = powerUnits;
+            m_torqueUnits = torqueUnits;
+        }
 
         Oscilloscope *getTotalExhaustFlowOscilloscope() const { return m_totalExhaustFlowScope; }
         Oscilloscope *getExhaustFlowOscilloscope() const { return m_exhaustFlowScope; }

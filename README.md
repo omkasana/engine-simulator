@@ -16,12 +16,16 @@ Choose the archive that matches your computer:
 
 | Your computer | Download | Run |
 | --- | --- | --- |
-| Apple Silicon Mac (M1/M2/M3/M4) | macOS arm64 ZIP | Open `engine-sim.app` |
-| Windows PC | Windows x86_64 ZIP | Run `bin/engine-sim-desktop.exe` |
-| Linux x86_64 PC | Linux x86_64 `.tar.gz` | Extract it, then run `bin/engine-sim-desktop` |
+| Apple Silicon Mac (M1/M2/M3/M4) | macOS arm64 `.dmg` | Drag `engine-sim.app` to Applications, then open it |
+| Windows PC | Windows x86_64 installer `.exe` | Run Setup, then open **Open Engine Simulator** from Start |
+| Linux x86_64 PC | Debian/Ubuntu `.deb` | Install the package, then open **Open Engine Simulator** from the app launcher |
 
-The macOS build is unsigned. macOS may require you to approve it in System
-Settings before its first launch.
+Portable `.zip` (macOS/Windows) and `.tar.gz` (Linux) builds are also attached
+for users who do not want an installer.
+
+The community macOS build is ad-hoc signed but not Apple-notarized. macOS may
+require you to approve it in **System Settings > Privacy & Security** before
+its first launch.
 
 ## Using the simulator
 
@@ -40,8 +44,19 @@ Settings before its first launch.
 | Q / W / E / R | Throttle position |
 | Space + scroll | Fine throttle adjustment |
 | 1–5 | Simulation time warp |
+| F1 / F2 / F4 | Controls / engine picker / display and fuel settings |
 
 RPM hold requires both `H` and the dyno (`D`).
+
+Open **Settings** (or press F4) to choose between two saved interface modes.
+**Legacy** is the default and preserves the original pixel-style dashboard,
+original script units, compact engine picker, and original fuel display.
+**Modern** uses a cleaner scalable typeface and roomier controls, and adds an
+imperial/metric selector plus USD, EUR, GBP, INR, JPY, AUD, or CAD fuel-cost
+configuration. Enter your local price per litre; the dashboard shows the
+matching currency symbol and code. Currency starting values are examples, not
+live pump prices. All choices are stored for the current user and remain active
+when another engine is loaded.
 
 On touch or mouse-driven hosts, the dashboard keeps the same displays while
 adding direct controls: tap the Ignition, Dyno., or Hold row to toggle it; hold
@@ -141,15 +156,33 @@ for example `-DBISON_EXECUTABLE=/opt/homebrew/opt/bison/bin/bison` and
 
 ### Package
 
-Build packages on their target platform. For Apple Silicon macOS:
+Build packages on their target platform:
 
 ```sh
-cmake --preset macos-arm64-package
-cmake --build --preset macos-arm64-package
-(cd build/macos-arm64-package && cpack -G ZIP)
+make PLATFORM=macos-arm64 portable-package
+make PLATFORM=linux-x86_64 portable-package
+make PLATFORM=windows-x86_64 portable-package
 ```
 
-See [CMakePresets.json](CMakePresets.json) for the remaining platform presets.
+The macOS preset creates a DMG and app ZIP, Windows creates an NSIS Setup EXE
+and portable ZIP, and Linux creates a DEB and portable tarball. Cross-compiling
+is not required or recommended; build each package on its target operating
+system. See [CMakePresets.json](CMakePresets.json) for the underlying presets.
+
+### Publish a GitHub release
+
+The `Release packages and web app` GitHub Actions workflow builds every desktop
+package when a version tag is pushed. After committing and pushing a release:
+
+```sh
+git tag v0.3.0
+git push origin v0.3.0
+```
+
+The workflow creates the matching GitHub Release and attaches the DMG, app
+ZIP, Windows installer, Windows portable ZIP, Linux DEB, and Linux tarball.
+It can also be run manually from **Actions** using an existing tag. A normal
+branch push does not create release assets.
 
 ## Attribution and license
 
