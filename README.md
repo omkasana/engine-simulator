@@ -89,7 +89,7 @@ is useful historical background, but may not describe this fork's changes.
 Clone with the required submodules:
 
 ```sh
-git clone --recurse-submodules <this-fork-url>
+git clone --recurse-submodules https://github.com/omkasana/engine-simulator
 cd engine-sim
 ```
 
